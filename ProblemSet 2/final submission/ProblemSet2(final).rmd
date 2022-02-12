@@ -1,0 +1,918 @@
+---
+title: "Problem Set #2"
+author: "Zejia (Harry) Chen & Francis Lin"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  prettydoc::html_pretty:
+    df_print: kable
+    theme: leonids
+    highlight: github
+    toc: no
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+  pdf_document:
+    toc: no
+    toc_depth: '2'
+urlcolor: blue
+---
+
+```{r, include=FALSE}
+library(ggplot2)
+library(data.table)
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
+```
+
+This is the second problem set for QTM 385 - Intro to Statistical Learning.  This homework will cover applied exercises related to validation sets, loss functions, and linear regression.
+
+Please use the intro to RMarkdown posted in the Intro module and my .Rmd file as a guide for writing up your answers.  You can use any language you want, but I think that a number of the computational problems are easier in R.  Please post any questions about the content of this problem set or RMarkdown questions to the corresponding discussion board.
+
+Your final deliverable should be a .zip archive that includes a .Rmd/.ipynb file and either a rendered HTML file or a PDF.  Students can complete this assignment in groups of up to 3.  Please identify your collaborators at the top of your document.  All students should turn in a copy of the solutions, but your solutions can be identical to those of your collaborators.
+
+This assignment is due by February 4th, 2022 at 11:59 PM EST.  
+
+***
+
+`taiwanPricing_train.csv`, `taiwanPricing_test1.csv`, and `taiwanPricing_test2.csv` are data sets that include information about real estate valuation in Sindian District, New Taipei City, Taiwan.  The training data has 314 instances of property value (`Price`) in New Taiwan Dollars per 3.3 meters squared, observation IDs (`ID`), and 7 predictors:
+
+  1. `Year` and `Month` of transaction
+  2. `Age` of property sold
+  3. `DisttoMRT`: The distance from the property to the nearest Taiwan Metro Transit station
+  4. `NumConvStore`: The number of convenience stores in the living circle
+  5. `Lat` and `Long`: Latitude and Longitude of the property
+  
+Your goal for this problem set is to build a model that does a good job of predicting the price of properties that we have not yet seen!
+
+**An important note: The two test data sets, with 50 observations each, are our holdout data for assessing the quality of our predictions on data that have no part in training the model.  Do not touch these when training your model!  You can forget about these two data sets until the final parts of this assignment.**
+
+```{r}
+housePrice <- read.csv('/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/ProblemSet 2/TaiwanPricing_Train.csv')
+```
+
+```{r}
+str(housePrice)
+```
+
+
+***
+
+## Problem 1
+
+### Part 1
+
+For the training data, create a plot that shows the relationship between the latitude and longitude of the property and its price.  There are many ways to accomplish this: you can try creating a 3D scatter plot, but I think there are more clever ways to accomplish this in 2 dimensions using color, point size, or smoothers to create a contour plot.
+
+What relationships do you see?  Do you think that this relationship is easily captured using a linear model?  Why or why not?
+
+#### Solution
+
+```{r}
+gg <- ggplot(housePrice, aes(x=Lat, y=Long)) + 
+  geom_point(aes(col=Price), alpha=0.9) + 
+  labs( 
+       y="Longgitude", 
+       x="Latitude", 
+       title="Taiwan Housing Price")
+
+plot(gg)
+```
+
+It seems houses with a higher per square meter price can be are most likely to appear at the upper right corner while lower housing price estates are scattered across the edge of the map.
+
+I do not think linear regression does a good job in model the relationship between longitude/latitude and the housing price since we cannot use variable to explain the other. 
+
+### Part 2
+
+One approach to capturing this kind of relationship is to move to a **nonparametric model** that gives us an opportunity to capture the weird non-standard dependence structures that come from geographic data.  We haven't discussed many of these yet, but we have briefly discussed $K$-nearest neighbors regression.  For this kind of problem where *distance* is actually distance, this simple model makes a lot of sense.
+
+As a reminder, $K$-nearest neighbors regression is a voting-style model that maps outcomes from the training data to predictions using the following algorithm:
+
+  1. Given a vector $\boldsymbol{x}_{Test}$ in the $P$-dimensional covariate space, compute the distance (however you may want to define distance) from $\boldsymbol{x}_{Test}$ to each $\boldsymbol{x}_{i,Train}$ in the training set.
+  2. Select the $K$ smallest distances and store the set of $k$ outcomes, $y_{i,Train}$.
+  3. Compute $y_{Test}$ as a distance-weighted combination of the $k$ selected outcomes:
+  
+  $$y_{Test} = \sum_{k = 1}^K \alpha_k y_{k,Train}$$
+  where $\alpha_k$ is a weight that is a function of the distance between the test point and the respective training point (smaller distance goes with larger weight).  Sometimes, this weight is just set to $\frac{1}{K}$.
+  
+At its core $K$-nearest neighbors is a pretty simple algorithm, but the search for nearest neighbors can be quite intensive with hacky approaches (like the kinds we would write if we were to naively write the search algorithm).  For this reason, we'll use prebuilt implementations for our analyses.  In R, I recommend using the function `knn.reg` in the `FNN` package or `knnreg` in the `caret` package.  In Python, the `KNeighborsRegressor` function in `sklearn` will do the same thing.
+
+Using the latitude, longitude, and price included in the training data set, compute the mean squared error of the predictions made by the model **for the in-sample data** for $K$-nearest neighbors for 1 through 20 nearest neighbors.  Plot the mean squared error (MSE) against the number of nearest neighbors.
+
+Recall that the in-sample MSE always decreases as the flexibility and complexity of the model increases.  What is the least complex value of $k$ for the $K$-nearest neighbors algorithm?  In a sentence or two, explain why this is the case.
+
+#### Solution
+```{r,message=FALSE}
+library(caret)
+```
+
+```{r}
+mse <- c()
+
+for (i in 1:20){
+  
+  model = knnreg(Price ~ Lat + Long, data = housePrice, k = i)
+  
+  pred_Price = predict(model, housePrice[,c('Long', 'Lat')])
+  
+  mse <- append(mse, mean((housePrice$Price - pred_Price)^2))
+}
+```
+
+```{r}
+seq = seq(1, 20)
+mse_df <- data.frame(seq, mse)
+```
+
+```{r}
+gg <- ggplot(mse_df, aes(x=seq, y=mse)) + 
+  geom_line() +
+  scale_x_continuous(label = ) + 
+  labs( 
+       y="MSE", 
+       x="k", 
+       title="K vs. MSE")
+
+plot(gg)
+```
+
+Since the in-sample MSE always decreases as the flexibility and complexity of the model increases, the most complex model for KNN is actually when $K=1$. 
+
+It is because that every data point needs to search for its nearest neighbor, which make the search process extremely complex. When $K=1$, moving from one spot to another may yield very different prediction; whereas if $K$ is a larger number, the prediction is less likely to change because it's considering more points in its vincinity.
+
+### Part 3
+
+Write a function called `knn_reg_kfold` that takes five arguments: 1) `x` - a $N \times P$ matrix of predictors, 2) `y` - a $N$ vector of outcomes, 3) `k` - an integer value for the number of neighbors to take, 4) `folds` - an integer value for the number of folds in the data, and 5) `seed` - an integer value that will define the seed that dictates how the folds are divided.  Your function should return the $K$-fold cross validation estimate of the expected mean squared prediction error for a new observation.
+
+**The implementation of $K$-nearest neighbors that you choose may have a built in $K$-fold cross validation method.  For this problem, please construct the folds and estimates yourself!**
+
+Using `knn_reg_kfold`, set the numer of folds to 2,5,10,20, and $N$ (LOOCV) and estimate the cross validation estimate of the mean squared prediction error.  Plot your estimate of the expected prediction error against the number of nearest neighbors for each number of folds on the same graph.  Does the number of neighbors with the lowest $K$-fold prediction error remain the same/similar across all the number of folds?
+
+Note: Leave one out cross validation should be relatively quick given this data size and the speed of the KNN algorithms in the recommended packages.  If you find that your function is really dragging, check that your implementation is using a compiled sort and search.  If that doesn't work, reach out and I can try to provide some advice.
+
+#### Solution
+```{r}
+knn_reg_kfold <- 
+  function(x, y, nei, folds, seed){
+    out <- c()
+    #Randomly shuffle the data
+    set.seed(seed)
+    df <- cbind(y, x)
+    rand_df<-df[sample(nrow(df)),]
+    
+    #Create n folds equally size folds
+    n_folds <- cut(seq(1,nrow(rand_df)),breaks=folds,labels=FALSE)
+    
+    # perform the k-fold cross validation
+    for (i in 1:folds){
+        #Segment the data by fold using the which() function 
+        index <- which(n_folds == i, arr.ind = T)
+        test_data <- rand_df[index,]
+        train_data <- rand_df[-index,]
+        
+        y_name = names(rand_df)[1]
+        x_name = names(rand_df)[-1]
+
+        train_x <- as.matrix(train_data[, x_name])
+        train_y <- as.matrix(train_data[, y_name])
+        test_x <- as.matrix(test_data[, x_name])
+        test_y <- as.matrix(test_data[, y_name])
+        
+        # construct the model and predict the outcome
+        knnmodel = knnreg(train_x, train_y, k = nei)
+        pred_Price = predict(knnmodel, newdata=test_x)
+        
+        # retrieve mse
+        #test_df <- data.frame(test_data$Price, pred_Price)
+        out <- append(out, mean((test_y - pred_Price)^2))
+  
+    }
+    return(mean(out))
+}
+
+
+```
+
+```{r}
+fold_2 <- c()
+fold_5 <- c()
+fold_10 <- c()
+fold_20 <- c()
+fold_314 <- c()
+```
+
+
+```{r}
+for (i in c(2, 5, 10, 20, nrow(housePrice))){
+  for (j in 1:20){
+    mse = knn_reg_kfold(housePrice[,c('Long', 'Lat')], housePrice[,'Price'], j, i, 123)
+    
+    assign(paste('fold_', i, sep = ''), append(get(paste('fold_', i, sep = '')), mse))
+  }
+}
+```
+
+
+*Plot*
+```{r}
+seq = seq(1, 20)
+kFold_df <- data.frame(seq, fold_2, fold_5, fold_10, fold_20, fold_314)
+```
+
+```{r}
+colors <- c("2_fold" = "red", "5_fold" = "blue", 
+            "10_fold" = "yellow", "20_fold" = "green", 
+            "N_fold" = "orange")
+
+gg <- ggplot(kFold_df, aes(x = seq)) + 
+  geom_line(aes(y = fold_2, color = "2_fold"), size = 1.1) +
+  geom_line(aes(y = fold_5, color = "5_fold"), size = 1.1) +
+  geom_line(aes(y = fold_10, color = "10_fold"), size = 1.1) +
+  geom_line(aes(y = fold_20, color = "20_fold"), size = 1.1) +
+  geom_line(aes(y = fold_314, color = "N_fold"), size = 1.1) +
+  labs( 
+       y="MSE", 
+       x="numbers of neighbor", 
+       title="K-fold Cross Validation",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors) + 
+  scale_x_continuous("seq", labels = as.character(seq), breaks = seq)
+
+plot(gg)
+```
+
+Looking at the graph, we can see that when k-nearest neighbor is around *4*, our model minimized the mean square error, achieving the best result across various folds.
+
+
+### Part 4
+
+Create the plot in Part 2 again using different seeds for your validation set splits.  Do the results change?  What does this say about the relationship between the estimated expected prediction error and your choice of splits?
+
+#### Solution 4
+
+We will set a the seed to `2022` in this case.
+```{r}
+fold_2 <- c()
+fold_5 <- c()
+fold_10 <- c()
+fold_20 <- c()
+fold_314 <- c()
+```
+
+```{r}
+for (i in c(2, 5, 10, 20, nrow(housePrice))){
+  for (j in 1:20){
+    mse = knn_reg_kfold(housePrice[,c('Long', 'Lat')], housePrice[,'Price'], j, i, 2022)
+    
+    assign(paste('fold_', i, sep = ''), append(get(paste('fold_', i, sep = '')), mse))
+  }
+}
+```
+
+*Plot*
+```{r}
+seq = seq(1, 20)
+kFold_df <- data.frame(seq, fold_2, fold_5, fold_10, fold_20, fold_314)
+```
+
+```{r}
+colors <- c("2_fold" = "red", "5_fold" = "blue", 
+            "10_fold" = "yellow", "20_fold" = "green", 
+            "N_fold" = "orange")
+
+gg <- ggplot(kFold_df, aes(x = seq)) + 
+  geom_line(aes(y = fold_2, color = "2_fold"), size = 1.1) +
+  geom_line(aes(y = fold_5, color = "5_fold"), size = 1.1) +
+  geom_line(aes(y = fold_10, color = "10_fold"), size = 1.1) +
+  geom_line(aes(y = fold_20, color = "20_fold"), size = 1.1) +
+  geom_line(aes(y = fold_314, color = "N_fold"), size = 1.1) +
+  labs( 
+       y="MSE", 
+       x="numbers of neighbor", 
+       title="K-fold Cross Validation",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors) + 
+  scale_x_continuous("seq", labels = as.character(seq), breaks = seq)
+
+plot(gg)
+```
+
+The $k$ that display the lowest MSE is approximately the same as what we observe in part 2. Thus, we can say that there is little relationship between estimated expectation error and our seed selection.
+
+### Part 5
+
+Using the above information, choose a value of $K$ as the "optimal" choice.  In a few sentences, defend your choice.  You can use any heuristic you'd like to make this choice.  
+
+Using your chosen value of $K$, create a latitude-longitude prediction map - using the training data, draw the predictions for new observations within the square created by the minimum and maximum latititudes and longitudes.  Create the same drawings for a 1-nearest neighbor regression and a 20-nearest neighbor regression.  Compare these pictures to your original plot.  How do the different choices compare to the training data?
+
+Hints:
+
+  1. There are a number of different ways to create this plot.  I'd recommend using a grid-based approach to create a set of predictions and then a smoothed contour plot or colored dot plot to demonstrate the relationship between lat, long, and price.
+  2. In 2-dimensions, we don't need a huge grid set.  150 equally spaced points per axis should be plenty.
+  3. Suppose we have two sequences of values and we want a data frame with all possible pairwise combinations of the values.  In R, check out the `expand.grid()` function.  This way, you can pass this as the test data for a $K$NN regression and only have to do the search once (as opposed to a double for loop).  In Python, check out `meshgrid` in `numpy` - it can quickly be converted to a `numpy` or `Pandas` array.
+  
+#### Solution
+
+I will choose $K = 4$
+
+Finding the min and the max of the `Lat` and `Long` to set the scale of the plot
+```{r}
+seqLat <- seq(min(housePrice[,'Lat']), max(housePrice[,'Lat']), length = 150)
+seqLong <- seq(min(housePrice[,'Long']), max(housePrice[,'Long']), length = 150)
+smooth_df <- expand.grid(Lat = seqLat, Long = seqLong)
+```
+
+
+**Fold_1**
+```{r}
+knn_1 <- knnreg(housePrice[,c('Lat', 'Long')], housePrice[, 'Price'], k=1)
+smooth_df$predPrice_1 <- predict(knn_1, smooth_df[,c('Lat', 'Long')])
+```
+
+
+```{r}
+gg <- ggplot(smooth_df, aes(x=Lat, y=Long)) + 
+  geom_point(aes(col=predPrice_1)) + 
+  labs( 
+       y="Longgitude", 
+       x="Latitude", 
+       title="Taiwan Housing Price, K =1")
+
+plot(gg)
+```
+
+**Fold_4**
+```{r}
+knn_4 <- knnreg(housePrice[,c('Lat', 'Long')], housePrice[, 'Price'], k=4)
+smooth_df$predPrice_4 <- predict(knn_4, smooth_df[,c('Lat', 'Long')])
+```
+
+```{r}
+gg <- ggplot(smooth_df, aes(x=Lat, y=Long)) + 
+  geom_point(aes(col=predPrice_4)) + 
+  labs( 
+       y="Longgitude", 
+       x="Latitude", 
+       title="Taiwan Housing Price, K = 4")
+
+plot(gg)
+```  
+
+**Fold_20**
+```{r}
+knn_20 <- knnreg(as.matrix(cbind(housePrice$Lat, housePrice$Long)), as.matrix(housePrice$Price), k=20)
+```
+
+
+```{r}
+smooth_df <- expand.grid(Lat = seqLat, Long = seqLong)
+smooth_df$predPrice_20 <- predict(knn_20, smooth_df[,c('Lat', 'Long')])
+```
+
+```{r}
+gg <- ggplot(smooth_df, aes(x=Lat, y=Long)) + 
+  geom_point(aes(col=predPrice_20)) + 
+  labs( 
+       y="Longgitude", 
+       x="Latitude", 
+       title="Taiwan Housing Price, K = 20")
+
+plot(gg)
+```
+
+Judging the graph, the plot seems much smoother when $K=20$. It does make sense since the larger the $K$ is, more neighbors are taken in to account, making the predicted value more connected with each other.
+
+## Problem 2
+
+### Part 1
+
+We've used latitude and longitude to build a predictive model.  Let's try a different predictor - `Age`.  For the training data, plot the age of the house against the price of the house.  Is this relationship linear?  Polynomial?  What degree of polynomial do you think best describes the relationship?  In a sentence or two, logically explain why this perceived relationship might hold.
+
+#### Solution
+```{r}
+gg <- ggplot(housePrice, aes(x=Age, y=Price)) + 
+  geom_point() +
+  labs( 
+       y="Price", 
+       x="Age", 
+       title="Age vs. Price")
+
+plot(gg)
+```
+
+Although, the relation between `Age` and `Price` is a little bit hard to discern, I will say it seems like there is a quadratic relation between the two with houses that have 20-30 years old selling for slightly less price.
+
+### Part 2
+
+Find the degree of polynomial that maximizes the expected prediction error using the training data.  That is compare $y_i = \alpha + \epsilon_i$ vs. $y_i = \alpha + \beta_1 x_i + \epsilon_i$ vs. $y_i = \alpha + \beta_1 x_i + \beta_2 x_i^2 + \epsilon_i$ and so on.
+
+Since the linear model is algebraically "easy"^[I say with the most sarcastic quotes of all time.  Really I just mean that it's analytically tractible to do a lot of things.], let's use the wealth of non-simulation based estimates of the expected prediction error to make this decision.  Write a function called `lm_pred_metrics` that takes in either a fit linear regression model **or** the $N \times P + 1$ matrix of predictors (with the first column being a column of 1s to capture the intercept) and a $N$-vector of outcomes.  The function should compute:
+
+  1. The AIC
+  
+  2. The BIC
+  
+  3. The leave-one-out cross validation estimate of the expected prediction error
+  
+  4. The generalized cross validation estimate of the expected prediction error
+  
+You should compute the regression coefficients and estimate of $\sigma^2$ using a pre-built linear regression function and extract these.  For LOOCV, you'll also need the hat/influence matrix.  For GCV (under linear regression), you can avoid using the hat matrix if you pick up on the trace trick in the hints.  Your chosen regression implementation will also likely return residuals, $\hat{\boldsymbol{y}}$, and many other meaningful metrics of fit.  
+
+Some important identities for this exercise:
+
+  1. For a linear regression model with $N$ observations of $P$ predictors and outcomes, the log-likelihood of the model under normally distributed idiosyncratic errors (e.g. the standard model you all know) is:
+  $$\ell \ell (\beta , \sigma^2 | \boldsymbol{X},\boldsymbol{y}) = -\frac{N}{2} \log 2 \pi - \frac{N}{2} \log \sigma^2 - \frac{1}{2 \sigma^2} \sum \limits_{i = 1}^N (y_i - \boldsymbol{x}_i \boldsymbol{\beta})^2$$
+  
+  2. For any linear regression model with an intercept and $P$ predictors, there are $d = P+2$ parameters: $P$ coefficients, the intercept, and $\sigma^2$.
+  
+  3. Given a matrix of predictors, $\boldsymbol{X}$, and a corresponding vector of coefficients, $\boldsymbol{\beta}$, $\hat{\boldsymbol{y}} = \boldsymbol{X} \boldsymbol{\beta}$
+  
+  4. The hat/projection matrix for linear regression can be computed as $H = \boldsymbol{X(X'X)^{-1}X'}$.  In R, we can get the diagonal of the hat matrix very quickly using `hatvalues(model)`.  In Python, you will find these values in various regression implementations as the *influence* of a specific point.
+  
+  5. The trace of $H$ for linear regression can be modified using the trace trick: 
+  
+  $$\text{tr}(H) = \text{tr}\left[ \boldsymbol{X(X'X)^{-1}X'} \right] = \text{tr}\left[ \boldsymbol{(X'X)^{-1}X'X} \right]$$
+  
+  6. The AIC and BIC can be computed as:
+  
+  $$\text{AIC} = - 2 \ell \ell + 2d \text{   ;   } \text{BIC} = -2\ell\ell + d \log n$$
+  
+  7. The LOOCV and GCV estimates of expected prediction error can be computed as:
+  
+  $$\text{LOOCV} = \frac{1}{N} \sum \limits_{i = 1}^N \left[\frac{y_i - \hat{y}_i}{1 - H_{i,i}} \right]^2 \text{   ;   } \text{GCV} = \frac{1}{N} \sum \limits_{i = 1}^N \left[\frac{y_i - \hat{y}_i}{1 - \frac{\text{tr}(H)}{N}} \right]^2$$
+
+#### Solution
+
+```{r}
+fit <- lm(Price ~ Age, housePrice)
+```
+
+```{r}
+lm_pred_metrics <-
+  
+function(lm_model){
+  # the model residual
+  res <- lm_model$residual
+  
+  # the number of observation
+  n <- nrow(lm_model$model)
+  w <- rep(1, n)
+  
+  # the log-likelihood function
+  ll <-0.5 * (sum(log(w)) - n * (log(2 * pi) + 1 - log(n) + log(sum(w * res^2))))
+  
+  #getting the degree of freedom
+  k.original<-length(lm_model$coefficients)
+  df.ll<-k.original+1 
+  
+  # Getting the BIC
+  BIC <- -2 * ll + log(n) * df.ll
+  
+  # Getting the AIC
+  AIC <- -2 * ll + 2 * df.ll
+  
+  # Getting the LOOVC
+  h=lm.influence(lm_model)$h
+  LOOCV <- mean((res/(1-h))^2)
+  
+  # Getting the GCV
+  
+  # trace trick 
+  #the trace of the hat matrix will equal to the number of parameters in the linear regression model
+  trace <- length(lm_model$coefficients)
+  
+  GCV <- mean((res/(1-(trace/n)))^2)
+  
+  # return output
+  tab <- matrix(c(AIC, BIC, LOOCV, GCV), ncol=4, byrow=TRUE)
+  
+  colnames(tab) <- c('AIC', 'BIC', 'LOOCV', 'GCV')
+  rownames(tab) <- c('Metrics')
+  
+  return(as.data.frame(tab))
+  
+  # the number of coefficient that we estimate
+}
+
+```
+
+
+```{r}
+lm_pred_metrics(fit)
+```
+
+### Part 3
+
+Using your function above, compute the various metrics of generalizability for all polynomial models of order 1 through 10 (the third order polynomial model would be $y_i = \alpha + \beta_1 x_{i} + \beta_2 x_{i}^2 + \beta_3 x_i^3 + \epsilon_i$, for example).  Plot each metric against degree of the basis expansion.  Which of the models minimizes the generalization error?  Is this conclusion consistent across metrics?  Would we expect $K$-fold cross validation to produce a similar conclusion?  What does this say about predictive model selection for standard linear regression models?
+
+Create a plot that shows the predicted values granted by the optimal model for any age that's within the set of ages in the training set and compare it to the observed data in the training data.  Does it look right on the entire training data?  A little underfit?  A little overfit?
+
+Remember the degree of the model as the optimal Age model.
+
+#### Solution
+```{r}
+
+for (i in 1:10){
+  model = lm(Price ~poly(Age, degree = i, raw = T), data = housePrice)
+  assign(paste('model_', i, sep = ''), model)
+}
+
+```
+
+```{r}
+metrics_df <- data.frame()
+
+for (i in 1:10){
+  metrics_df <- rbind(metrics_df, lm_pred_metrics(get(paste('model_', i, sep = ''))))
+}
+
+seq <- seq(1, 10)
+metrics_df <- cbind(metrics_df, seq)
+
+```
+
+**Plotting**
+
+*AIC & BIC*
+```{r}
+colors <- c("AIC" = "red", "BIC" = "blue")
+
+gg <- ggplot(metrics_df, aes(x = seq)) + 
+  geom_line(aes(y = AIC, color = "AIC"), size = 1.1) +
+  geom_line(aes(y = BIC, color = "BIC"), size = 1.1) +
+  labs( 
+       y="Value", 
+       x="Poly Order", 
+       title="AIC & BIC for each Poly Order Regression",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors) + 
+  scale_x_continuous("n_degree", labels = as.character(seq), breaks = seq)
+
+plot(gg)
+```
+
+*LOOCV*
+```{r}
+gg <- ggplot(metrics_df, aes(x=seq, y=LOOCV)) + 
+  geom_line() +
+  labs( 
+       y="LOOCV", 
+       x="n_degree", 
+       title="n_degree vs. LOOCV") + 
+  scale_x_continuous("n_degree", labels = as.character(seq), breaks = seq)
+
+plot(gg)
+```
+
+*GCV*
+```{r}
+gg <- ggplot(metrics_df, aes(x=seq, y=GCV)) + 
+  geom_line() +
+  labs( 
+       y="GCV", 
+       x="n_degree", 
+       title="n_degree vs. GCV") + 
+  scale_x_continuous("n_degree", labels = as.character(seq), breaks = seq)
+
+plot(gg)
+```
+
+The second order polynomial seems to fit the model the best judging all the metrics. 
+
+```{r}
+model_optim <- lm(Price ~poly(Age, degree = 2, raw = T), data = housePrice)
+```
+
+
+```{r}
+new <- data.frame(Age = housePrice[,'Age'])
+pred_price_age <- predict(model_optim, new)
+```
+
+```{r}
+new <- cbind(new, pred_price_age)
+new <- cbind(new, Price = housePrice$Price)
+```
+
+
+```{r}
+colors <- c("Observed Price" = "red", "Predicted Price" = "blue")
+
+gg <- ggplot(new, aes(x = Age)) + 
+  geom_point(aes(y = Price, color = "Observed Price")) +
+  geom_line(aes(y = pred_price_age, color = "Predicted Price")) +
+  labs( 
+       y="Price", 
+       x="Age", 
+       title="Quadratic Model Prediction",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors)
+
+plot(gg)
+```
+
+
+## Problem 3
+
+Using the tools you've already developed, come up with a good predictive model for the relationship between distance to nearest metro station (`DisttoMRT`), number of convenience stores in the walking radius (`NumConvStores`), and house price (`Price`).  You should use $K$-nearest neighbors or linear regression as your predictive model.  Using the methods we've discussed for quantifying generalization error, argue that your model is optimal in some sense of out-of-sample generalization.
+
+Notes:
+
+  1. For linear models, definitely think about **interaction terms** between the two predictors.  Maybe you'll need them, maybe you won't.
+
+  2. It's infeasible to to test **all** possible linear models for the two predictors (considering interactions and/or basis expansions).  Use intuition to restrict the set of models you examine.
+
+  3. You may want to use $K$-fold cross validation for the regression models.  You don't have to, but you can implement it yourself **or** use a pre-built implementation.
+
+  4. Make sure that you're comparing apples-to-apples when comparing generalization metrics.  For example, the comparison between AIC and 5-fold cross validated prediction error does not give us an interpretable comparison.
+
+  5. The advantage of $K$-nearest neighbors is that you can test all possible models.  However, it has a tendency to undersmooth some relationships.
+  
+#### Solution
+
+**KNN Model**
+
+We will set a the seed to `123` in this case.
+```{r}
+fold_10 <- c()
+fold_20 <- c()
+fold_314 <- c()
+```
+
+```{r}
+for (i in c(2, 5, 10, 20, nrow(housePrice))){
+  for (j in 1:20){
+    mse = knn_reg_kfold(housePrice[,c('DisttoMRT', 'NumConvStores')], housePrice[,'Price'], j, i, 123)
+    
+    assign(paste('fold_', i, sep = ''), append(get(paste('fold_', i, sep = '')), mse))
+  }
+}
+```
+
+*Plot*
+```{r}
+seq = seq(1, 20)
+kFold_df <- data.frame(seq, fold_10, fold_20, fold_314)
+```
+
+```{r}
+colors <- c( "10_fold" = "yellow", "20_fold" = "green", 
+            "N_fold" = "orange")
+
+gg <- ggplot(kFold_df, aes(x = seq)) + 
+  geom_line(aes(y = fold_10, color = "10_fold"), size = 1.1) +
+  geom_line(aes(y = fold_20, color = "20_fold"), size = 1.1) +
+  geom_line(aes(y = fold_314, color = "N_fold"), size = 1.1) +
+  labs( 
+       y="MSE", 
+       x="numbers of neighbor", 
+       title="K-fold Cross Validation",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors) + 
+  scale_x_continuous("K", labels = as.character(seq), breaks = seq)
+
+plot(gg)
+```
+
+We will use a KNN-model where $K=4$ to be our predictive model,
+
+```{r}
+knn_4 = knnreg(housePrice[,c('DisttoMRT', 'NumConvStores')], housePrice[,'Price'], k = 4)
+knn4_pred_Price = predict(knn_4, newdata=housePrice[,c('DisttoMRT', 'NumConvStores')])
+```
+
+```{r}
+plot_df <- data.frame(knn4_pred_Price, housePrice$Price)
+colors <- c( "predict price" = "yellow", "overseved price" = "green")
+
+gg <- ggplot(plot_df, aes(x = knn4_pred_Price, y = housePrice.Price)) + 
+  geom_point() +
+  geom_abline(intercept=0, slope=1, col = 'red') +
+  labs( 
+       y="overserved price", 
+       x="predict price", 
+       title="predict price vs. observed price using KNN model",
+       color = "Legend"
+       )
+
+plot(gg)
+```
+
+**Linear Regression**
+
+```{r}
+metrics_df <- data.frame()
+
+for (i in 1:3){
+  for (j in 1:3){
+    
+    fit <- lm(Price ~poly(DisttoMRT, degree = i, raw = T) + poly(NumConvStores, degree = j, raw = T), 
+   data = housePrice)
+    
+    temp_df <- lm_pred_metrics(fit)
+    row.names(temp_df) <- paste(paste(paste("MRT-", i, sep = ""), "Conv-"), j, sep="")
+    
+    metrics_df <- rbind(metrics_df, temp_df)
+  }
+}
+```
+
+```{r}
+metrics_df$rowName <- row.names(metrics_df)
+```
+
+*AIC & BIC*
+
+```{r}
+colors <- c( "AIC" = "red", "BIC" = "green")
+
+gg <- ggplot(metrics_df, aes(x = rowName)) + 
+  geom_point(aes(y = AIC, color = "AIC"), size = 1.1) +
+  geom_point(aes(y = BIC, color = "BIC"), size = 1.1) +
+  labs( 
+       y="value", 
+       x="interaction term", 
+       title="AIC&BIC, Polynomial Terms",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors) + 
+  theme(axis.text.x = element_text(angle = 40, vjust=0.5, size = 8),  # rotate x axis text
+        panel.grid.minor = element_blank()) 
+
+plot(gg)
+```
+
+*LOOCV & GCV*
+
+```{r}
+colors <- c( "LOOCV" = "red", "GCV" = "green")
+
+gg <- ggplot(metrics_df, aes(x = rowName)) + 
+  geom_point(aes(y = LOOCV, color = "LOOCV"), size = 1.1) +
+  geom_point(aes(y = GCV, color = "GCV"), size = 1.1) +
+  labs( 
+       y="value", 
+       x="interaction term", 
+       title="LOOCV & GCV, Polynomial Terms",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors) + 
+  theme(axis.text.x = element_text(angle = 40, vjust=0.5, size = 8),  # rotate x axis text
+        panel.grid.minor = element_blank()) 
+
+plot(gg)
+```
+
+Judging the above graphs, all four metrics (AIC, BIC, LOOCV, GCV) are lowest when `DisttoMRT` is a second order polynomial whereas `NumConvStores` is a first order polynomial.
+
+Lets use the model to validate the accuracy
+
+```{r}
+polyModel_optim <- lm(Price ~poly(DisttoMRT, degree = 2, raw = T) + poly(NumConvStores, degree = 1, raw = T),
+                      data = housePrice)
+
+poly_pred_Price = predict(polyModel_optim, newdata=housePrice[,c('DisttoMRT', 'NumConvStores')])
+```
+
+```{r}
+plot_df <- data.frame(poly_pred_Price, housePrice$Price)
+```
+
+```{r}
+colors <- c( "predict price" = "yellow", "overseved price" = "green")
+
+gg <- ggplot(plot_df, aes(x = poly_pred_Price, y = housePrice.Price)) + 
+  geom_point() +
+  geom_abline(intercept=0, slope=1, col = 'red') +
+  labs( 
+       y="overserved price", 
+       x="predict price", 
+       title="predict price vs. observed price using polynomial regression",
+       color = "Legend"
+       )
+
+plot(gg)
+```
+
+**Comparison between two models**
+
+```{r}
+knn_4_mse <- knn_reg_kfold(housePrice[,c('DisttoMRT', 'NumConvStores')], housePrice[,'Price'],
+                           4, nrow(housePrice), 123)
+poly_mse <- lm_pred_metrics(polyModel_optim)$LOOCV
+
+
+paste("LOOCV for KNN_4 = ", round(knn_4_mse, 3))
+paste("LOOCV for Poly Linear Regression = ", round(poly_mse, 3))
+```
+
+Thus, we can conclude that KNN is indeed the better model in predicting the price using `DisttoMRT` and `NumConvStores` as our predictors.
+
+## Problem 4
+
+### Part 1
+
+You've found 3 "optimal" models for predicting the price of a home - one that looks at location, one that looks at age, and one that looks at features surrounding the home.  Compare the LOOCV estimate of the expected prediction error across the three models.  Which one performs best?
+
+Obviously, we could probably do better if we used all of the predictors in one model.  But, each model that we've tested is *cohesive* - we're examining the predictive power of different sets of real estate covariates.
+
+Also, we've judged out-of-sample predictive power without actually ever using an out-of-sample data set - a.k.a. the "original sin".  Fortunately, your gracious teacher has held out some test sets for you.  Using the models you declared optimal in the previous steps, assess the mean squared prediction error for each model on the two holdout data sets.
+
+Does the same ranking of models hold for each test set in terms of average predictive accuracy?  Are the estimates produced by the various methods close to the average prediction errors in the test sets?
+
+#### Solution
+
+**KNN_location**
+```{r}
+knn_location <- knn_reg_kfold(housePrice[,c('Lat', 'Long')], housePrice[,'Price'], 4, 314, 123)
+
+paste('The LOOCV estimate of the expected prediction error for KNN_Location: ', round(knn_location, 3))
+```
+
+**lm_Age**
+```{r}
+lm_Age <- lm(Price ~poly(Age, degree = 2, raw = T), data = housePrice)
+
+paste('The LOOCV estimate of the expected prediction error for lm_Age: ',
+      round(lm_pred_metrics(lm_Age)$'LOOCV', 3))
+```
+
+**KNN_Surrounding**
+```{r}
+knn_surrounding <- knn_reg_kfold(housePrice[,c('DisttoMRT', 'NumConvStores')], housePrice[,'Price'], 4, 314, 123)
+
+paste('The LOOCV estimate of the expected prediction error for KNN_Surrounding: ', round(knn_surrounding, 3))
+```
+
+Looking at the prediction error, it seems like our first KNN model has the lowest MSE which makes it best model so far. Let's validate our models further by validate them the two test data.
+
+___
+#### Testing
+```{r}
+housePrice_t1 <- read.csv('/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/ProblemSet 2/TaiwanPricing_Test1.csv')
+
+housePrice_t2 <- read.csv('/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/ProblemSet 2/TaiwanPricing_Test2.csv')
+```
+
+**KNN_location**
+```{r}
+knn_location_t1 <- knn_reg_kfold(housePrice_t1[,c('Lat', 'Long')], housePrice_t1[,'Price'], 
+                                 4, nrow(housePrice_t1), 123)
+
+knn_location_t2 <- knn_reg_kfold(housePrice_t2[,c('Lat', 'Long')], housePrice_t2[,'Price'],
+                                 4, nrow(housePrice_t1), 123)
+
+paste('KNN_Location LOOCV estimate of the expected prediction error for test_1:', round(knn_location_t1, 3))
+paste('KNN_Location LOOCV estimate of the expected prediction error for test_2:', round(knn_location_t2, 3))
+```
+
+
+**lm_Age**
+```{r}
+lm_Age_t1 <- lm(Price ~poly(Age, degree = 2, raw = T), data = housePrice_t1)
+lm_Age_t2 <- lm(Price ~poly(Age, degree = 2, raw = T), data = housePrice_t2)
+
+paste('lm_Age LOOCV estimate of the expected prediction error for test_1:',
+      round(lm_pred_metrics(lm_Age_t1)$'LOOCV', 3))
+
+paste('lm_Age LOOCV estimate of the expected prediction error for test_2:',
+      round(lm_pred_metrics(lm_Age_t2)$'LOOCV', 3))
+```
+
+**KNN_Surrounding**
+```{r}
+knn_surrounding_t1 <- knn_reg_kfold(housePrice_t1[,c('DisttoMRT', 'NumConvStores')], housePrice_t1[,'Price'],
+                                    4, nrow(housePrice_t2), 123)
+knn_surrounding_t2 <- knn_reg_kfold(housePrice_t2[,c('DisttoMRT', 'NumConvStores')], housePrice_t2[,'Price'],
+                                    4, nrow(housePrice_t2), 123)
+
+paste('KNN_Surrounding LOOCV estimate of the expected prediction error for test_1:', 
+      round(knn_surrounding_t1, 3))
+paste('KNN_Surrounding LOOCV estimate of the expected prediction error for test_2:',
+      round(knn_surrounding_t2, 3))
+```
+
+The result is approximately the same with the `KNN_location` achieving the lowest expected prediction error. However, for test data 2, `KNN_Surrounding` has the lowest expectation prediction error. 
+
+Thus, there is still possibility that the `KNN_Surrounding` model can well-perform the other one in the true world depending on different scenarios.
+
+
+### Part 2
+
+A common phenomenon in predictive error quantification is that test sets that are truly randomly pulled from the same data generating process as the training set will overestimate the average prediction error (e.g. be a bit more pessimistic than reality).  This is due to the fact that we are optimizing predictive accuracy with respect to smaller surrogate models rather than the full caboodle of training data - even LOOCV is an average over slightly smaller submodels that results in some distance from the truth.  On the other hand, test sets that are not plausibly drawn from the same data generating process as the training data will give much higher generalization errors - we can think of this as **extrapolation error**.
+
+Compare the training data to the two test sets.  Does this phenomenon help explain the results you just found?
+
+At the end of the day, we're just making good educated guesses.  However, we aren't wizards.  We can't know what we haven't already seen.
+
+**Solution**
+
+When comparing the expectation prediction error between the test set and the training set. All of the prediction error for our models are actually less than the prediction error made by the training set (except one). 
+
+Regardless of the any possible calculation error, I think one of the possible explanation will just be the randomness of the data. Since our test data are both pretty small (50 observation each,) it is possible that they are not representative enough for us to fully test the accuracy of our model. 
+
+It will be definitely better, we can have a large volume of untouched test data, but it is part of challenge of constructing predictive statistical model!
