@@ -110,10 +110,6 @@ df_train$Outstate = log(df_train$Outstate)
 df_test$Outstate = log(df_test$Outstate)
 ```
 
-```{r}
-names(df_train)
-```
-
 
 `Outstate` vs. `S.F.Ratio`
 
@@ -296,6 +292,60 @@ As we can see, **smooth spline** is indeed the best one.
 
 Now, let's consider the multivariate case with all of the predictors.  Let's improve on the standard linear model by using LASSO to do some variable selection and shrinkage.  Fit the LASSO model to the training data and use K-fold cross validation to select a value of $\lambda$.  Be sure to explain why you made the choice that you did.  How many variables are used in the "optimal" model?  Be sure to record the optimal $\lambda$ for later use.
 
+```{r}
+library(caret)
+library(glmnet)
+library(dplyr)
+```
+
+
+```{r}
+# convert `Private` into a factor
+df_trainFac <- df_train[,-19]
+df_trainFac$Private[df_train$Private == "Yes"] <- 1
+df_trainFac$Private[df_train$Private == "No"] <- 0
+df_trainFac$Private <- as.factor(df_trainFac$Private)
+
+# Reshape the factor `Private` to fit the data set into LASSO
+dummy_trn <- caret::dummyVars("~ .", data = df_trainFac)
+df_trainFac <- data.frame(predict(dummy_trn, newdata = df_trainFac))
+```
+
+
+```{r}
+trn_x <- as.matrix(df_trainFac[,-10])
+trn_y <- as.matrix(df_trainFac$Outstate)
+```
+
+
+**LASSO**
+```{r}
+fit_cv_LASSO<- cv.glmnet(trn_x, trn_y, type.measure = "mse", alpha = 1, family = "gaussian", nfolds = 10)
+
+plot(fit_cv_LASSO)
+fit_cv_LASSO
+```
+Let use `1se` to retrieve our 'significant' predictors, since it minimize the number of predictor. We are going to use GAM and each predictors can be modeled as a non-linear function. In order to prevent overfitting, I think we should only reserve the most important predictors for our models.
+```{r}
+coef_optim_LASSO <- coef(fit_cv_LASSO, s= fit_cv_LASSO$lambda.1se)
+```
+
+```{r}
+theme_set(theme_bw())
+coef_df <- as.data.frame(summary(coef_optim_LASSO))
+col_names_df <- rbind(c("Intercept", 0),data.frame(colnames(trn_x)))
+# saving all leftover significant predictors
+coef_shrink <- col_names_df[c(coef_df$i),1]
+coef_df <- cbind(coef_shrink, coef_df)
+coef_df <- coef_df[,-c(2,3)]
+colnames(coef_df)[1] <- "predictors"
+colnames(coef_df)[2] <- "coef"
+coef_df$coef <- round(coef_df$coef, 7)
+
+coef_df %>% arrange(desc(coef)) 
+
+```
+
 ### Part 3 (15 pts.)
 
 Now, let's see if we can improve on the standard LASSO regression model using a GAM.  There are three approaches you can take here:
@@ -313,6 +363,15 @@ Create a plot that shows the function for each predictor.  Do the marginal relat
 Be sure to note your "optimal" model and why you chose that one.  Your search doesn't need to be exhaustive (that's impossible), just a reasonable attempt to get a good predictive model!
 
 Compare the GCV for your chosen GAM to the K-fold CV estimate for LASSO.  Does capturing non-linearities within the data improve prediction accuracy?
+
+#### Solution
+
+```{r}
+library(mgcv)
+
+
+```
+
 
 ### Part 4 (15 pts.)
 

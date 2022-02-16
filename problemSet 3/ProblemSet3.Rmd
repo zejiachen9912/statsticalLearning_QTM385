@@ -451,6 +451,7 @@ plot(LASSO_office_cv)
 ```{r}
 LASSO_office_cv
 ```
+
 ```{r}
 LASSO_coef_optim <- coef(LASSO_office, s= LASSO_office_cv$lambda.min)
 LASSO_coef_optim
