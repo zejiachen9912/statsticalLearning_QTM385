@@ -1,24 +1,16 @@
-
 ---
-title: 'Problem Set #4'
-author: "Kevin McAlister"
-date: "February 9th, 2022"
+title: "Problem Set #4"
+author: "Zejia Chen, Francis Lin, Mike Lin"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
 output:
-  pdf_document:
-    toc: no
-    toc_depth: '2'
   prettydoc::html_pretty:
     df_print: kable
+    theme: material
     highlight: github
-    theme: leonids
     toc: no
     toc_depth: 2
     toc_float:
       collapsed: no
-  html_document:
-    df_print: paged
-    toc: no
-    toc_depth: '2'
 urlcolor: blue
 ---
 
@@ -59,6 +51,30 @@ Notes:
   
   2. With an appropriate argument about the relationship between continuity in the 1st and 2nd derivatives, you don't need to show continuity on the first derivatives.
   
+#### Solution
+
+If the first derivative is discontinuous, then the second derivative does not exist. In order for a function to have a derivative it first must be continuous.Thus, the only thing we need to prove here is the continuity of cubic spline's second derivative
+
+We first take the second derivative w.r.t the cubic spline function
+
+$$h_1(x)''=0,\ h_2(x)''=0,\ h_3(x)''=2,\ h_4(x)''=6x$$
+
+for $h_{5 \text{ to }k+4}''$
+
+$$=\Big\{ -6(x-\xi_1)_+ - 6(x-\xi_2)_+ -,\ ...\ ,-6(x-\xi_K)  \Big\}$$
+  
+Then for $\xi_1$, we can rewrite $y_i''$ as
+
+$$y_i''= \alpha + 2 + 6x- 6\beta_1(\xi_1 - \xi_1) + \epsilon_i$$
+
+for $\xi_2$
+$$y_i''= \alpha + 2 + 6x- 6\beta_1(\xi_2 - \xi_1)   - 6\beta_2(\xi_2-\xi_2) + \epsilon_i$$
+
+for $\xi_K$
+$$y_i''= \alpha + 2 + 6x- 6\beta_1(\xi_K - \xi_1) - 6\beta_2(\xi_K-\xi_2) -\ ...\ -6\beta_K(\xi_K-\xi_K)+ \epsilon_i$$
+Therefore, for every every knot, $K_i$, the cubic spline is continuous in its second derivative, and as we mentioned previously, so will the first derivative.
+  
+  
 ## Problem 2 (80 pts)
 
 The data sets `college_train.csv` (600 observations) and `college_test.csv` (177 observations) include information about different colleges in the U.S.  We're going to use this data set to try to build a model that predicts the logarithm of out of state tuition for a college using a variety of predictors related to college quality.  Note that this data was collected back in 1995 - a magical time in U.S. history where "Run Around" by Blues Traveler was playing on the radio, Bill Clinton had a plan to actually balance the U.S. budget, and young Dr. McAlister learned to tie his shoes in Ms. Lamb's first grade class.  It is also notable that college used to be affordable!  Don't be too downtrodden when you look at this data set and see Emory's out of state tuition back then...
@@ -76,6 +92,205 @@ Using a measure of expected prediction error appropriate for a standard linear m
 Next, estimate a cubic regression spline, a cubic natural spline, and a smoothing spline using the entire training data.  For the regression spline and natural spline, you need to choose the number of knots or degrees of freedom.  I would recommend setting these to 5 to start and playing with it until you get something that looks right.  For the smoothing spline, you should choose the final form using a built-in cross-validation method (most likely GCV).  Add the prediction curve to your plot.  How do the drawn curves differ between methods?
 
 Finally, use your polynomial model and splines to create predictions for the test set and quantify the mean squared error for the test set.  Which model performs best?  Worst?  Provide some rationale for this outcome.
+
+#### Solution
+
+```{r}
+library(ggplot2)
+```
+
+
+```{r}
+rm(list=ls(all=TRUE))
+setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/problemSet 4")
+df_train <- read.csv("college_train.csv")
+df_test <- read.csv("college_test.csv")
+
+df_train$Outstate = log(df_train$Outstate)
+df_test$Outstate = log(df_test$Outstate)
+```
+
+```{r}
+names(df_train)
+```
+
+
+`Outstate` vs. `S.F.Ratio`
+
+```{r}
+ggplot(df_train, aes(x = S.F.Ratio, 
+                          y = Outstate)) + 
+  geom_point() +
+  labs( 
+       x="student/faculty ratio", 
+       y="outstate tuition", 
+       )
+
+```
+
+To me, it looks like there is a negative quasi-linear relationship between S/F ratio and outstate tuition as we expect private, elite university will have a realtively small S/F ratio which also leads to high tuition charged.
+
+**Polynomial Approach**
+
+For a simple linear regression, we can simply calculate LOOCV for each order to determind the best model
+Here, I would use order from 1 - 8
+```{r}
+poly_EPE <- c()
+
+for (order in c(1:8)){
+  lm_fit <- lm(Outstate ~ poly(S.F.Ratio, degree = order, raw = T), data = df_train)
+  poly_EPE <- append(poly_EPE, mean((lm_fit$residuals/(1-hatvalues(lm_fit)))^2))
+}
+
+seq = seq(1, 8)
+df_EPE <- data.frame(seq, poly_EPE)
+
+```
+
+```{r}
+ggplot(df_EPE, aes(x=seq, y=poly_EPE)) + 
+  geom_line() +
+  scale_x_continuous("K_th polynomial", labels = as.character(seq), breaks = seq)
+  labs( 
+       y="LOOCV", 
+       x="K_th polynomial", 
+       title="K_th polynomial vs. LOOCV")
+
+```
+
+From the above graph, it seems like the 3rd order polynomial has the smallest cross validation EPE. Hence, we choose the 3rd order polynomial as the basis of our model. 
+
+```{r}
+lm_optim <- lm(Outstate ~poly(S.F.Ratio, degree = 3, raw = T), data = df_train)
+
+df_predict <- data.frame(S.F.Ratio = df_train[,'S.F.Ratio'])
+pred_Outstate <- predict(lm_optim, df_predict)
+
+df_predict <- cbind(df_predict, pred_Outstate, Outstate = df_train$Outstate)
+```
+
+```{r}
+colors <- c("Observed Tuition" = "grey", "Predicted Tuition" = "blue")
+
+ggplot(df_predict, aes(x = S.F.Ratio)) + 
+  geom_point(aes(y = Outstate, color = "Observed Tuition")) +
+  geom_line(aes(y = pred_Outstate, color = "Predicted Tuition")) +
+  labs( 
+       y="Tuittion", 
+       x="S.F Ratio", 
+       title="Cubic Linear Polynomial Prediction",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors)
+
+```
+
+**Splines**
+```{r}
+library(splines)
+```
+
++ Cubic Regression Spline
+```{r}
+lm_bspline <- lm(Outstate ~ bs(S.F.Ratio, df = 10, degree = 3), data = df_train)
+```
+
++ Natural Spline
+```{r}
+lm_nspline <- lm(Outstate ~ ns(S.F.Ratio), data = df_train)
+```
+
++ Smoothing Spline
+```{r}
+lm_sspline <- with(df_train, smooth.spline(S.F.Ratio, Outstate))
+```
+
+Let plot our splines out
+```{r}
+df_predict_splines <- data.frame(S.F.Ratio = df_train[,'S.F.Ratio'])
+pred_bs <- predict(lm_bspline, df_predict_splines)
+pred_ns <- predict(lm_nspline, df_predict_splines)
+pred_ss <- predict(lm_sspline, df_predict_splines)
+
+df_predict_splines <- cbind(df_predict_splines, pred_bs = pred_bs, pred_ns, 
+                            pred_ss = pred_ss[2], Outstate = df_train$Outstate)
+
+colnames(df_predict_splines)[4] <- "pred_ss"
+```
+
+```{r}
+colors <- c("Observed Tuition" = "grey", "bSpline" = "blue", "nSpline" = "red", "sSpline" = "green")
+
+ggplot(df_predict_splines, aes(x = S.F.Ratio)) + 
+  geom_point(aes(y = Outstate, color = "Observed Tuition")) +
+  geom_line(aes(y = pred_bs, color = "bSpline")) +
+  geom_line(aes(y = pred_ns, color = "nSpline")) +
+  geom_line(aes(y = pred_ss, color = "sSpline")) +
+  labs( 
+       y="Tuittion", 
+       x="S.F Ratio", 
+       title="Various Splines",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors)
+```
+
+**Validation**
+
+```{r}
+test_pred <- data.frame(S.F.Ratio = df_test[, 'S.F.Ratio'])
+
+# 3rd order poly
+test_poly <- predict(lm_optim, test_pred)
+mse_poly <- mean(( test_poly - df_test$Outstate )^2)
+
+# b-spline
+test_bs <- predict(lm_bspline, test_pred)
+mse_bs <- mean(( test_bs - df_test$Outstate )^2)
+
+# natural spline
+test_ns <- predict(lm_nspline, test_pred)
+mse_ns <- mean(( test_ns - df_test$Outstate )^2)
+
+# smooth spline
+test_ss <- predict(lm_sspline, test_pred)[2]
+temp <- data.frame(predict = test_ss, observe = df_test$Outstate)
+colnames(temp)[1] <- "predict"
+mse_ss <- mean(( temp$predict - temp$observe )^2)
+
+```
+
+
+*Prediction*
+```{r}
+test_pred <- cbind(test_pred, poly = test_poly, test_bs, test_ns, 
+                            test_ss = temp$predict, Outstate = df_test$Outstate)
+
+colors <- c("Observed Tuition" = "grey", "bSpline" = "blue", "nSpline" = "red",
+            "sSpline" = "green", "poly" = "orange")
+
+ggplot(test_pred, aes(x = S.F.Ratio)) + 
+  geom_point(aes(y = Outstate, color = "Observed Tuition")) +
+  geom_line(aes(y = test_bs, color = "bSpline")) +
+  geom_line(aes(y = test_ns, color = "nSpline")) +
+  geom_line(aes(y = test_ss, color = "sSpline")) +
+  geom_line(aes(y = poly, color = "poly")) +
+  labs( 
+       y="Tuittion", 
+       x="S.F Ratio", 
+       title="Validation",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors)
+```
+
+*MSE*
+```{r}
+mse <- data.frame(mse_poly, mse_bs, mse_ns,mse_ss)
+round(mse, 3)
+```
+
+As we can see, **smooth spline** is indeed the best one.
 
 ### Part 2 (15 pts.)
 
