@@ -99,6 +99,27 @@ Be sure to note your "optimal" model and why you chose that one.  Your search do
 
 Compare the GCV for your chosen GAM to the K-fold CV estimate for LASSO.  Does capturing non-linearities within the data improve prediction accuracy?
 
+df_train=read_csv('college_train.csv')
+df_test=read_csv('college_test.csv')
+library(mgcv)
+library(tree)
+library(caret)
+
+# First, convert Private variable to factor.
+df_train$Private=as.numeric(factor(df_train$Private))
+df_test$Private=as.numeric(factor(df_test$Private))
+df_train$Outstate=log(df_train$Outstate)
+df_test$Outstate=log(df_test$Outstate)
+# Drop college names.
+df_train=subset(df_train,select=-c(CollegeNames))
+df_test=subset(df_test,select=-c(CollegeNames))
+```
+
+```{r}
+gam1<-gam(Outstate~Private, data=df_train)
+plot(gam1)
+```
+
 ### Part 4 (15 pts.)
 
 Finally, let's use the training data to build a single regression tree.  Using a CART implementation, grow a regression tree over all predictors.  If you're interested, try changing some of the stopping criteria for the regression tree growth procedure and see how deep the tree goes.
@@ -110,6 +131,28 @@ Using cross-validation, find an "optimal" tree size with respect to the cost-com
 Be sure to save the model objects for the full and pruned trees.  These will be used to create predictions for the test set.
 
 Note that we don't yet have a measure of expected prediction accuracy for trees!  For now, don't worry about that.
+
+#### Solution
+rpart library
+```{r}
+library(tree)
+```
+
+```{r}
+tree=tree(Outstate~.,data=df_train)
+plot(tree)
+text(tree,pretty=2)
+cv_tree=cv.tree(tree,K=20)
+plot(cv_tree$size,cv_tree$dev,type='b',xlab='Number of Terminal Nodes',ylab='deviance')
+```
+The best number of nodes is 7. Prune the tree.
+```{r}
+p_tree=prune.tree(tree,best=7)
+plot(p_tree)
+text(p_tree)
+```
+The full tree object is saved in 'tree', and pruned one is in 'p_tree'.
+
 
 ### Part 5 (15 pts)
 
