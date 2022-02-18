@@ -61,17 +61,17 @@ $$h_1(x)''=0,\ h_2(x)''=0,\ h_3(x)''=2,\ h_4(x)''=6x$$
 
 for $h_{5 \text{ to }k+4}''$
 
-$$=\Big\{ -6(x-\xi_1)_+ - 6(x-\xi_2)_+ -,\ ...\ ,-6(x-\xi_K)  \Big\}$$
+$$=\Big\{ 6(x-\xi_1)_+ + 6(x-\xi_2)_+ +,\ ...\ ,+6(x-\xi_K)  \Big\}$$
   
 Then for $\xi_1$, we can rewrite $y_i''$ as
 
 $$y_i''= \alpha + 2 + 6x- 6\beta_1(\xi_1 - \xi_1) + \epsilon_i$$
 
 for $\xi_2$
-$$y_i''= \alpha + 2 + 6x- 6\beta_1(\xi_2 - \xi_1)   - 6\beta_2(\xi_2-\xi_2) + \epsilon_i$$
+$$y_i''= \alpha + 2 + 6x + 6\beta_1(\xi_2 - \xi_1)   + 6\beta_2(\xi_2-\xi_2) + \epsilon_i$$
 
 for $\xi_K$
-$$y_i''= \alpha + 2 + 6x- 6\beta_1(\xi_K - \xi_1) - 6\beta_2(\xi_K-\xi_2) -\ ...\ -6\beta_K(\xi_K-\xi_K)+ \epsilon_i$$
+$$y_i''= \alpha + 2 + 6x + 6\beta_1(\xi_K - \xi_1) + 6\beta_2(\xi_K-\xi_2) +\ ...\ +6\beta_K(\xi_K-\xi_K)+ \epsilon_i$$
 Therefore, for every every knot, $K_i$, the cubic spline is continuous in its second derivative, and as we mentioned previously, so will the first derivative.
   
   
@@ -286,7 +286,9 @@ mse <- data.frame(mse_poly, mse_bs, mse_ns,mse_ss)
 round(mse, 3)
 ```
 
-As we can see, **smooth spline** is indeed the best one.
+As we can see, **smooth spline** is indeed the best one. Not only it is continuous in both the first and second derivative, but it finds the right place to put our knots.
+
+It turns urns a discrete optimization problem into one of continuous optimization. It selects $\lambda$, a tuning parameter using cross-validation, instead of number and location of knots. 
 
 ### Part 2 (15 pts.)
 
@@ -368,9 +370,47 @@ Compare the GCV for your chosen GAM to the K-fold CV estimate for LASSO.  Does c
 
 ```{r}
 library(mgcv)
-
-
 ```
+
+```{r}
+# convert `Private` into a factor
+df_trainFac2 <- df_train[,-19]
+df_trainFac2$Private[df_train$Private == "Yes"] <- 1
+df_trainFac2$Private[df_train$Private == "No"] <- 0
+df_trainFac2$Private <- as.factor(df_trainFac2$Private)
+```
+
+1. smooth splines on every single variable except factor.
+```{r}
+gam1<-gam(Outstate~ Private + s(S.F.Ratio) + s(Grad.Rate) 
+          + s(perc.alumni) + s(PhD) + s(Room.Board) + s(Expend), data=df_trainFac2)
+plot(gam1, pages  = 1)
+summary(gam1)$sp.criterion
+```
+
+2. No splines at all.
+```{r}
+gam2<-gam(Outstate~Private+Grad.Rate+perc.alumni+PhD+Terminal+Room.Board+Expend+S.F.Ratio, data=df_trainFac2)
+summary(gam2)$sp.criterion 
+```
+
+
+3. Thin plate spline on `Expend` and `Grad.Rate`.
+```{r}
+gam3<-gam(Outstate~Private+perc.alumni+PhD+Terminal+Room.Board+s(Expend,Grad.Rate)+S.F.Ratio, data=df_train)
+plot(gam3, pages = 1)
+gam3
+```
+4. Thin plate spline on `PhD` and `Grad.Rate`.
+```{r}
+gam4<-gam(Outstate~Private+perc.alumni+s(PhD,Grad.Rate)+Terminal+Room.Board+Expend+S.F.Ratio, data=df_train)
+plot(gam4)
+gam4
+```
+
+Seems that smoothing splines on each variable gives the most accurate model in terms of GCV, so we choose 'gam1'. 
+
+The GCV for GAM model is 0.03941, and K-fold CV for LASSO is 0.04921, so our GAM improves the accuracy. 
 
 
 ### Part 4 (15 pts.)
@@ -385,11 +425,28 @@ Be sure to save the model objects for the full and pruned trees.  These will be 
 
 Note that we don't yet have a measure of expected prediction accuracy for trees!  For now, don't worry about that.
 
+#### Solution
+
+```{r}
+library(tree)
+```
+
+```{r}
+tree=tree(Outstate~.,data=df_train)
+plot(tree)
+text(tree,pretty=2)
+cv_tree=cv.tree(tree,K=20)
+plot(cv_tree$size,cv_tree$dev,type='b',xlab='Number of Terminal Nodes',ylab='deviance')
+```
+The best number of nodes is 7. Prune the tree.
+```{r}
+p_tree=prune.tree(tree,best=7)
+plot(p_tree)
+text(p_tree)
+```
+
 ### Part 5 (15 pts)
 
 Finally, let's compare the three models to see which one performs best on the out of sample data.  Create predictions using your LASSO model, GAM, full tree, and pruned tree for the out of sample test data.  Use these predictions to compute the out of sample MSE for each method.  Which performs best?  Worst?
 
 In a few sentences, discuss when you think LASSO will work better than GAMs and vice versa.  Given our toolset from this week, trees need some work.  And we'll do that next week!
-
-
-  
