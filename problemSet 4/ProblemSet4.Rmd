@@ -99,6 +99,10 @@ Be sure to note your "optimal" model and why you chose that one.  Your search do
 
 Compare the GCV for your chosen GAM to the K-fold CV estimate for LASSO.  Does capturing non-linearities within the data improve prediction accuracy?
 
+#### Solution
+
+In this part, we use variables selected by LASSO.
+```{r}
 df_train=read_csv('college_train.csv')
 df_test=read_csv('college_test.csv')
 library(mgcv)
@@ -115,10 +119,37 @@ df_train=subset(df_train,select=-c(CollegeNames))
 df_test=subset(df_test,select=-c(CollegeNames))
 ```
 
+Try different combinations of splines in our general additive model. 
+1. smooth splines on every single variable except factor.
 ```{r}
-gam1<-gam(Outstate~Private, data=df_train)
+gam1<-gam(Outstate~Private+s(Grad.Rate)+s(perc.alumni)+s(PhD)+s(Terminal)+s(Room.Board)+s(Expend)+s(S.F.Ratio), data=df_train)
 plot(gam1)
+gam1
+# Private not able to do spline, how to deal with Private
+# lot of combinations of splines
 ```
+2. No splines at all.
+```{r}
+gam2<-gam(Outstate~Private+Grad.Rate+perc.alumni+PhD+Terminal+Room.Board+Expend+S.F.Ratio, data=df_train)
+gam2
+```
+
+3. Thin plate spline on expenditure and grad rate.
+```{r}
+gam3<-gam(Outstate~Private+perc.alumni+PhD+Terminal+Room.Board+s(Expend,Grad.Rate)+S.F.Ratio, data=df_train)
+gam3
+```
+
+4.
+```{r}
+gam4<-gam(Outstate~Private+perc.alumni+s(PhD,Grad.Rate)+Terminal+Room.Board+Expend+S.F.Ratio, data=df_train)
+plot(gam4)
+gam4
+```
+
+Seems that smoothing splines on each variable gives the most accurate model in terms of GCV, so we choose 'gam1'. 
+
+The GCV for GAM model is 0.04248, and K-fold CV for LASSO is 0.04921, so our GAM improves the accuracy. 
 
 ### Part 4 (15 pts.)
 
@@ -145,12 +176,15 @@ text(tree,pretty=2)
 cv_tree=cv.tree(tree,K=20)
 plot(cv_tree$size,cv_tree$dev,type='b',xlab='Number of Terminal Nodes',ylab='deviance')
 ```
+The variables are Private, Apps, Room.Board, Expense, Terminal, AcceptRate. LASSO chooses Private, Grad.Rate, perc.alumni, PhD+Terminal, Room.Board, Expend, S.F.Ratio. The choice by LASSO is quite different from the choice by regression tree.
+
 The best number of nodes is 7. Prune the tree.
 ```{r}
 p_tree=prune.tree(tree,best=7)
 plot(p_tree)
 text(p_tree)
 ```
+The pruned tree is the same as full tree in the upper part (the part near its root), but the pruned tree doesn't have some of the leaf nodes that full tree has.
 The full tree object is saved in 'tree', and pruned one is in 'p_tree'.
 
 
