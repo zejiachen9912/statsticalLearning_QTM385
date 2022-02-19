@@ -1,0 +1,578 @@
+---
+title: "Problem Set #4"
+author: "Zejia Chen, Francis Lin, Mike Lin"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  prettydoc::html_pretty:
+    df_print: kable
+    theme: material
+    highlight: github
+    toc: no
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+urlcolor: blue
+---
+
+```{r, include=FALSE}
+library(ggplot2)
+library(data.table)
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
+```
+
+This is the fourth problem set for QTM 385 - Intro to Statistical Learning.  This homework will cover a derivation related to splines and two applied exercises related to smoothing splines, GAMs, and simple regression trees.
+
+Please use the intro to RMarkdown posted in the Intro module and my .Rmd file as a guide for writing up your answers.  You can use any language you want, but I think that a number of the computational problems are easier in R.  Please post any questions about the content of this problem set or RMarkdown questions to the corresponding discussion board.
+
+Your final deliverable should be two files - a .Rmd/.ipynb file and either a rendered HTML file or a PDF.  Students can complete this assignment in groups of up to 3.  Please identify your collaborators at the top of your document.  All students should turn in a copy of the solutions, but your solutions can be identical to those of your collaborators.
+
+This assignment is due by February 18th, 2022 at 11:59 PM EST.  
+
+***
+
+## Problem 1 (20 pts)
+
+Regression splines are a broadly applicable method for regression analysis because they can be represented and estimated as an augmented OLS problem.
+
+A generic cubic regression spline with $K$ knots can be represented as a linear model with $K + 4$ basis expansion terms:
+
+$$h_1(x) = 1 \text{   ;   } h_{\text{2 to 4}}(x) = \{x,x^2,x^3\}$$
+
+$$h_{\text{5 to K + 4}} = \{(x - \xi_1)_+^3 ,  (x - \xi_2)_+^3,...,(x - \xi_K)_+^3\}$$
+
+$$y_i = \alpha + \sum \limits_{k = 2}^{K + 4} \beta_k h_k(x_i) + \epsilon_i$$
+Cubic regression splines fit a function to the data that is continuous with respect to $x$ and continuous in its first two derivatives.
+
+For an arbitrary collection of $K \le N$ knots, prove that the cubic regression spline provides a function that is continuous in the first and second derivative at the knots.
+
+Notes:
+
+  1. You can assume that the function is class $C^2$ continuous away from the knots.  This is true and provable, but you can just take that for granted without further explanation.
+  
+  2. With an appropriate argument about the relationship between continuity in the 1st and 2nd derivatives, you don't need to show continuity on the first derivatives.
+  
+#### Solution
+
+First, note that if in order for a function to be differentiable at a point, it must be continuous at that point. Therefore, if the cubic regression spline is continuous at knots in the 2nd derivative, then it must be continuous at the knots in the 1st derivative.
+
+For the 1st knot ($x_i = \xi_1$)
+
+\begin{equation}
+\begin{split}
+
+y_i=f(x_i)&=\alpha+\beta_2\xi_1+\beta_3\xi^2+\beta_4\xi^3+\beta_5(\xi_1-\xi_1)^3+\epsilon_i\\
+
+&=\alpha+\beta_2\xi_1+\beta_3\xi^2+\beta_4\xi^3+\epsilon_i\\
+
+
+
+\end{split}
+\end{equation}
+
+Then take evaluate the 2nd derivative
+
+\begin{equation}
+\begin{split}
+
+f{''}(\xi_1)&=2\beta_3+6\beta_4\xi_1
+
+
+\end{split}
+\end{equation}
+
+Because $\beta_3,\beta_4$, and $\xi_1$ are all constants, we know
+
+$$\lim_{x \to \xi_1}2\beta_3+6\beta_4x = 2\beta_3+6\beta_4\xi_1$$
+
+Therefore, the function is continuous at knot 1 in the 2nd derivative. And this is true for any other knot $k>1$.
+
+\begin{equation}
+\begin{split}
+
+f{''}(\xi_k)&=2\beta_3+6\left[\beta_4\xi_k+\beta_5(\xi_k-\xi_2)+...+\beta_{k+4}(\xi_k - \xi_{k-1})\right]
+
+
+\end{split}
+\end{equation}
+
+\begin{equation}
+\begin{split}
+
+
+\lim_{\epsilon \to 0}f''(\xi_k+\epsilon)=\lim_{\epsilon \to 0}f''(\xi_k-\epsilon)&=f''(\xi_k)\\
+
+&=2\beta_3+6\left[\beta_4\xi_k+\beta_5(\xi_k-\xi_2)+...+\beta_{k+4}(\xi_k - \xi_{k-1})\right]
+
+
+\end{split}
+\end{equation}
+We can also evaluate this expression given a set of knots $\xi$. Therefore, the cubic regression spline is continuous at knots in 1st and 2nd derivative.
+  
+  
+## Problem 2 (80 pts)
+
+The data sets `college_train.csv` (600 observations) and `college_test.csv` (177 observations) include information about different colleges in the U.S.  We're going to use this data set to try to build a model that predicts the logarithm of out of state tuition for a college using a variety of predictors related to college quality.  Note that this data was collected back in 1995 - a magical time in U.S. history where "Run Around" by Blues Traveler was playing on the radio, Bill Clinton had a plan to actually balance the U.S. budget, and young Dr. McAlister learned to tie his shoes in Ms. Lamb's first grade class.  It is also notable that college used to be affordable!  Don't be too downtrodden when you look at this data set and see Emory's out of state tuition back then...
+
+As always, the test set is intended to be used only for quantifying expected prediction error after choosing some trained models.  A description of the variables in the data set can be found [here](https://www.rdocumentation.org/packages/ISLR/versions/1.4/topics/College).  I've added an additional predictor called `AcceptRate` which is the acceptance rate of the school in 1995.
+
+Note: I would recommend just recoding `Outstate = log(Outstate)` right at the beginning.
+
+### Part 1 (20 pts.)
+
+Let's start by looking at a single predictor - the student/faculty ratio `S.F.Ratio`.  Plot log out of state tuition against the student/faculty ratio.  Does this look linear?
+
+Using a measure of expected prediction error appropriate for a standard linear model, find the order of global polynomial that minimizes EPE.  Be sure to note your choice and why you made it.  Using this value, train your model on the full training set and plot the prediction curve implied by the polynomial model on your graph.
+
+Next, estimate a cubic regression spline, a cubic natural spline, and a smoothing spline using the entire training data.  For the regression spline and natural spline, you need to choose the number of knots or degrees of freedom.  I would recommend setting these to 5 to start and playing with it until you get something that looks right.  For the smoothing spline, you should choose the final form using a built-in cross-validation method (most likely GCV).  Add the prediction curve to your plot.  How do the drawn curves differ between methods?
+
+Finally, use your polynomial model and splines to create predictions for the test set and quantify the mean squared error for the test set.  Which model performs best?  Worst?  Provide some rationale for this outcome.
+
+#### Solution
+
+```{r}
+library(ggplot2)
+```
+
+
+```{r}
+#Import data and take out school names
+df_train <- read.csv("college_train.csv")[,-19]
+df_test <- read.csv("college_test.csv")[,-19]
+
+df_train$Outstate = log(df_train$Outstate)
+df_test$Outstate = log(df_test$Outstate)
+```
+
+
+`Outstate` vs. `S.F.Ratio`
+
+```{r}
+ggplot(df_train, aes(x = S.F.Ratio, 
+                          y = Outstate)) + 
+  geom_point() +
+  labs( 
+       x="student/faculty ratio", 
+       y="outstate tuition", 
+       )
+
+```
+
+To me, it looks like there is a negative quasi-linear relationship between S/F ratio and outstate tuition as we expect private, elite university will have a realtively small S/F ratio which also leads to high tuition charged.
+
+**Polynomial Approach**
+
+For a simple linear regression, we can simply calculate LOOCV for each order to determind the best model
+Here, I would use order from 1 - 8
+```{r}
+poly_EPE <- c()
+
+for (order in c(1:8)){
+  lm_fit <- lm(Outstate ~ poly(S.F.Ratio, degree = order, raw = T), data = df_train)
+  poly_EPE <- append(poly_EPE, mean((lm_fit$residuals/(1-hatvalues(lm_fit)))^2))
+}
+
+seq = seq(1, 8)
+df_EPE <- data.frame(seq, poly_EPE)
+
+```
+
+```{r}
+ggplot(df_EPE, aes(x=seq, y=poly_EPE)) + 
+  geom_line() +
+  scale_x_continuous("K_th polynomial", labels = as.character(seq), breaks = seq)
+  labs( 
+       y="LOOCV", 
+       x="K_th polynomial", 
+       title="K_th polynomial vs. LOOCV")
+
+```
+
+From the above graph, it seems like the 3rd order polynomial has the smallest cross validation EPE. Hence, we choose the 3rd order polynomial as the basis of our model. 
+
+```{r}
+lm_optim <- lm(Outstate ~poly(S.F.Ratio, degree = 3, raw = T), data = df_train)
+
+df_predict <- data.frame(S.F.Ratio = df_train[,'S.F.Ratio'])
+pred_Outstate <- predict(lm_optim, df_predict)
+
+df_predict <- cbind(df_predict, pred_Outstate, Outstate = df_train$Outstate)
+```
+
+```{r}
+colors <- c("Observed Tuition" = "grey", "Predicted Tuition" = "blue")
+
+ggplot(df_predict, aes(x = S.F.Ratio)) + 
+  geom_point(aes(y = Outstate, color = "Observed Tuition")) +
+  geom_line(aes(y = pred_Outstate, color = "Predicted Tuition")) +
+  labs( 
+       y="Tuittion", 
+       x="S.F Ratio", 
+       title="Cubic Linear Polynomial Prediction",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors)
+
+```
+
+**Splines**
+```{r}
+library(splines)
+```
+
++ Cubic Regression Spline
+```{r}
+lm_bspline <- lm(Outstate ~ bs(S.F.Ratio, df = 10, degree = 3), data = df_train)
+```
+
++ Natural Spline
+```{r}
+lm_nspline <- lm(Outstate ~ ns(S.F.Ratio), data = df_train)
+```
+
++ Smoothing Spline
+```{r}
+lm_sspline <- with(df_train, smooth.spline(S.F.Ratio, Outstate))
+```
+
+Let plot our splines out
+```{r}
+df_predict_splines <- data.frame(S.F.Ratio = df_train[,'S.F.Ratio'])
+pred_bs <- predict(lm_bspline, df_predict_splines)
+pred_ns <- predict(lm_nspline, df_predict_splines)
+pred_ss <- predict(lm_sspline, df_predict_splines)
+
+df_predict_splines <- cbind(df_predict_splines, pred_bs = pred_bs, pred_ns, 
+                            pred_ss = pred_ss[2], Outstate = df_train$Outstate)
+
+colnames(df_predict_splines)[4] <- "pred_ss"
+```
+
+```{r}
+colors <- c("Observed Tuition" = "grey", "bSpline" = "blue", "nSpline" = "red", "sSpline" = "green")
+
+ggplot(df_predict_splines, aes(x = S.F.Ratio)) + 
+  geom_point(aes(y = Outstate, color = "Observed Tuition")) +
+  geom_line(aes(y = pred_bs, color = "bSpline")) +
+  geom_line(aes(y = pred_ns, color = "nSpline")) +
+  geom_line(aes(y = pred_ss, color = "sSpline")) +
+  labs( 
+       y="Tuittion", 
+       x="S.F Ratio", 
+       title="Various Splines",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors)
+```
+
+**Validation**
+
+```{r}
+test_pred <- data.frame(S.F.Ratio = df_test[, 'S.F.Ratio'])
+
+# 3rd order poly
+test_poly <- predict(lm_optim, test_pred)
+mse_poly <- mean(( test_poly - df_test$Outstate )^2)
+
+# b-spline
+test_bs <- predict(lm_bspline, test_pred)
+mse_bs <- mean(( test_bs - df_test$Outstate )^2)
+
+# natural spline
+test_ns <- predict(lm_nspline, test_pred)
+mse_ns <- mean(( test_ns - df_test$Outstate )^2)
+
+# smooth spline
+test_ss <- predict(lm_sspline, test_pred)[2]
+temp <- data.frame(predict = test_ss, observe = df_test$Outstate)
+colnames(temp)[1] <- "predict"
+mse_ss <- mean(( temp$predict - temp$observe )^2)
+
+```
+
+
+*Prediction*
+```{r}
+test_pred <- cbind(test_pred, poly = test_poly, test_bs, test_ns, 
+                            test_ss = temp$predict, Outstate = df_test$Outstate)
+
+colors <- c("Observed Tuition" = "grey", "bSpline" = "blue", "nSpline" = "red",
+            "sSpline" = "green", "poly" = "orange")
+
+ggplot(test_pred, aes(x = S.F.Ratio)) + 
+  geom_point(aes(y = Outstate, color = "Observed Tuition")) +
+  geom_line(aes(y = test_bs, color = "bSpline")) +
+  geom_line(aes(y = test_ns, color = "nSpline")) +
+  geom_line(aes(y = test_ss, color = "sSpline")) +
+  geom_line(aes(y = poly, color = "poly")) +
+  labs( 
+       y="Tuittion", 
+       x="S.F Ratio", 
+       title="Validation",
+       color = "Legend"
+       ) +
+  scale_color_manual(values = colors)
+```
+
+*MSE*
+```{r}
+mse <- data.frame(mse_poly, mse_bs, mse_ns,mse_ss)
+round(mse, 3)
+```
+
+As we can see, **smooth spline** is indeed the best one.
+
+### Part 2 (15 pts.)
+
+Now, let's consider the multivariate case with all of the predictors.  Let's improve on the standard linear model by using LASSO to do some variable selection and shrinkage.  Fit the LASSO model to the training data and use K-fold cross validation to select a value of $\lambda$.  Be sure to explain why you made the choice that you did.  How many variables are used in the "optimal" model?  Be sure to record the optimal $\lambda$ for later use.
+
+```{r}
+library(caret)
+library(glmnet)
+library(dplyr)
+```
+
+
+```{r}
+
+df_train <- read.csv("college_train.csv")[,-19]
+df_test <- read.csv("college_test.csv")[,-19]
+
+df_train$Outstate = log(df_train$Outstate)
+df_test$Outstate = log(df_test$Outstate)
+
+# convert `Private` into two dummy variables
+df_train$Private <- ifelse(df_train$Private == "Yes", 1, 0)
+
+df_trainFac <- df_train
+
+df_trainFac$Private.0 <- ifelse(df_trainFac$Private == 0, 1, 0)
+df_trainFac$Private.1 <- ifelse(df_trainFac$Private == 1, 1, 0)
+df_trainFac <- df_trainFac[,-1]
+
+
+```
+
+
+```{r}
+trn_x <- as.matrix(select(df_trainFac, -Outstate))
+trn_y <- as.matrix(df_trainFac$Outstate)
+```
+
+
+**LASSO**
+```{r}
+fit_cv_LASSO<- cv.glmnet(trn_x, trn_y, type.measure = "mse", alpha = 1, family = "gaussian", nfolds = 10)
+
+plot(fit_cv_LASSO)
+fit_cv_LASSO
+```
+
+
+Let's use `1se` to retrieve our 'significant' predictors, since it minimize the number of predictor. We are going to use GAM and each predictors can be modeled as a non-linear function. In order to prevent overfitting, I think we should only reserve the most important predictors for our models.
+```{r}
+coef_optim_LASSO <- coef(fit_cv_LASSO, s= fit_cv_LASSO$lambda.1se)
+```
+
+
+
+```{r}
+theme_set(theme_bw())
+coef_df <- as.data.frame(summary(coef_optim_LASSO))
+col_names_df <- rbind(c("Intercept", 0),data.frame(colnames(trn_x)))
+# saving all leftover significant predictors
+coef_shrink <- col_names_df[c(coef_df$i),1]
+coef_df <- cbind(coef_shrink, coef_df)
+coef_df <- coef_df[,-c(2,3)]
+colnames(coef_df)[1] <- "predictors"
+colnames(coef_df)[2] <- "coef"
+coef_df$coef <- round(coef_df$coef, 7)
+
+coef_df %>% arrange(desc(coef)) 
+
+```
+
+### Part 3 (15 pts.)
+
+Now, let's see if we can improve on the standard LASSO regression model using a GAM.  There are three approaches you can take here:
+
+  1. Use all of the predictors.
+  2. Only use the predictors selected by LASSO under your optimal model.
+  3. Try to fit the GAM with an even smaller model using a subset of predictors from a higher sparsity point on the LASSO path.
+  
+Any of these approaches are fine for this problem.  However, your model should include `S.F.Ratio` and `Private` (I'm pretty sure that both of these will pop up early in the LASSO path).  Subset selection for GAMs is something that people are working on!  There are some ways to build-in LASSO style penalties, but it's difficult to determine what a zero even is - since these are functions instead of linear combinations, what would we even shrink?
+
+Try different combinations of linear terms, spline terms, and think-plate/tensor spline terms to try to minimize the GCV associated with your GAM.  Most implementations will return this as part of the model object.
+
+Create a plot that shows the function for each predictor.  Do the marginal relationships make sense?  For any 2-predictor spline terms, do they capture anything that wouldn't be captured by a linear model?  Look at your function for `S.F.Ratio`.  Does it look like the smoothing spline you uncovered in part 1?  What does this say about the plausibility of the additivity assumption for this specific variable?
+
+Be sure to note your "optimal" model and why you chose that one.  Your search doesn't need to be exhaustive (that's impossible), just a reasonable attempt to get a good predictive model!
+
+Compare the GCV for your chosen GAM to the K-fold CV estimate for LASSO.  Does capturing non-linearities within the data improve prediction accuracy?
+
+#### Solution
+
+In this part, we use variables selected by LASSO.
+```{r}
+library(mgcv)
+library(tree)
+library(caret)
+```
+
+Try different combinations of splines in our general additive model. 
+1. smooth splines on every single variable except factor.
+```{r}
+gam1<-gam(Outstate~Private+s(Grad.Rate)+
+                           s(perc.alumni)+
+                           s(PhD)+
+                           s(Terminal)+
+                           s(Room.Board)+
+                           s(Expend)+
+                           s(S.F.Ratio), data=df_train)
+plot(gam1)
+gam1
+# Private not able to do spline, how to deal with Private
+# lot of combinations of splines
+```
+2. No splines at all.
+```{r}
+gam2<-gam(Outstate~Private+Grad.Rate+perc.alumni+PhD+Terminal+Room.Board+Expend+S.F.Ratio, data=df_train)
+gam2
+```
+
+3. Thin plate spline on expenditure and grad rate.
+```{r}
+gam3<-gam(Outstate~Private+perc.alumni+PhD+Terminal+Room.Board+s(Expend,Grad.Rate)+S.F.Ratio, data=df_train)
+gam3
+```
+
+4.
+```{r}
+gam4<-gam(Outstate~Private+perc.alumni+s(PhD,Grad.Rate)+Terminal+Room.Board+Expend+S.F.Ratio, data=df_train)
+plot(gam4)
+gam4
+```
+
+The plot shows the marginal change of log tuition. According to the GAM plot, marginal change in log tuition (control for other predictors) is around zero and the relationship between log tuition and S.F ratio is not linear, whereas the smoothing spline in part 1 shows a (almost) linear relationship in most of its domain. So possibly the strong relationship between S.F ratio and tuition that we see in smoothing spline of part 1 is due to other predictors. 
+
+For 2-predictor spline terms (gam3 and 4), they capture a lot of complex interactions between the predictors, as you can see in the plots for gam3 and 4.
+
+For the additive assumption, it is not very plausible generally, because we see some complex interaction between predictors.
+
+Seems that smoothing splines on each variable gives the most accurate model in terms of GCV, so we choose 'gam1'. 
+
+The GCV for GAM model `gam1` is 0.039, and K-fold CV for LASSO is 0.04921, so our GAM improves the accuracy. 
+
+
+### Part 4 (15 pts.)
+
+Finally, let's use the training data to build a single regression tree.  Using a CART implementation, grow a regression tree over all predictors.  If you're interested, try changing some of the stopping criteria for the regression tree growth procedure and see how deep the tree goes.
+
+Create a graphical representation of this tree.  What variables are selected by the CART procedure?  Does this line up with the LASSO choices?
+
+Using cross-validation, find an "optimal" tree size with respect to the cost-complexity criterion.  Use your choice to create a pruned tree and plot it.  How does the pruned tree differ from the full tree?
+
+Be sure to save the model objects for the full and pruned trees.  These will be used to create predictions for the test set.
+
+Note that we don't yet have a measure of expected prediction accuracy for trees!  For now, don't worry about that.
+
+#### Solution
+
+```{r, message=F}
+library(tree)
+```
+
+```{r,message=F}
+tree=tree(Outstate~.,data=df_train)
+plot(tree)
+text(tree,pretty=2)
+cv_tree=cv.tree(tree,K=20)
+plot(cv_tree$size,cv_tree$dev,type='b',xlab='Number of Terminal Nodes',ylab='deviance')
+```
+The variables are Private, Apps, Room.Board, Expense, Terminal, AcceptRate. LASSO chooses Private, Grad.Rate, perc.alumni, PhD+Terminal, Room.Board, Expend, S.F.Ratio. The choice by LASSO is quite different from the choice by regression tree.
+
+The best number of nodes is 7. Prune the tree.
+```{r}
+p_tree=prune.tree(tree,best=7)
+plot(p_tree)
+text(p_tree)
+```
+The pruned tree is the same as full tree in the upper part (the part near its root), but the pruned tree doesn't have some of the leaf nodes that full tree has.
+The full tree object is saved in 'tree', and pruned one is in 'p_tree'.
+
+
+### Part 5 (15 pts)
+
+Finally, let's compare the three models to see which one performs best on the out of sample data.  Create predictions using your LASSO model, GAM, full tree, and pruned tree for the out of sample test data.  Use these predictions to compute the out of sample MSE for each method.  Which performs best?  Worst?
+
+#### Solution
+
+First, we reshape the test data as we did with training data.
+
+```{r}
+df_test <- read.csv("college_test.csv")[,-19]
+df_test$Outstate = log(df_test$Outstate)
+
+
+df_test$Private <- ifelse(df_test$Private == "Yes", 1, 0)
+
+df_testFac <- df_test
+
+df_testFac$Private.0 <- ifelse(df_testFac$Private == 0, 1, 0)
+df_testFac$Private.1 <- ifelse(df_testFac$Private == 1, 1, 0)
+df_testFac <- df_testFac[,-1]
+```
+
+```{r}
+tst_x <- as.matrix(select(df_testFac, -Outstate))
+```
+
+Lasso prediction
+```{r}
+fit.lasso <- glmnet(trn_x, trn_y, alpha = 1)
+
+prediction.lasso <- predict.glmnet(fit.lasso, newx = tst_x, s= fit_cv_LASSO$lambda.1se)
+```
+
+GAM prediction (with the `gam1` model that we chose in part 3)
+
+```{r}
+prediction.GAM <- predict(gam1, newdata = df_test)
+```
+
+Full tree prediction
+
+```{r,message=F}
+prediction.tree <- predict(tree, newdata = df_test)
+```
+
+Pruned tree prediction
+
+```{r}
+prediction.ptree <- predict(p_tree, newdata = df_test)
+```
+
+Compare the MSE for these predictions
+
+```{r}
+test.MSE <- data.frame(Models = c("Lasso", "GAM", "Full tree", "Pruned tree"),
+                       MSE = c((mean(df_test$Outstate - prediction.lasso))^2,
+                               (mean(df_test$Outstate - prediction.GAM))^2,
+                               (mean(df_test$Outstate - prediction.tree))^2,
+                               (mean(df_test$Outstate - prediction.ptree))^2))
+
+test.MSE
+```
+
+In this case, the pruned tree seems to work best.
+
+I think Lasso will work better than GAM when there are some very strong predictors and the other predictors are close to 0. GAM is more flexible and will work better when we need to capture some non-linear relationship.
+
+
+
+
+
+
+
+
+
+
