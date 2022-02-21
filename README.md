@@ -28,7 +28,7 @@ Predictors Selection for Linear Regresson
 
 Topics include: Ridge, LASSO
 
-[View html](https://htmlpreview.github.io/https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/problemSet%203/Final%20Submission/ProblemSet3_final.html)
+[View html](https://htmlpreview.github.io/?https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/problemSet%203/Final%20Submission/ProblemSet3_final.html)
 
 [View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/problemSet%203/Final%20Submission)
 
@@ -39,6 +39,6 @@ Nonlinear approach to linear regression
 
 Topics include: Splines, GAM
 
-[View html](https://htmlpreview.github.io/https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/problemSet%204/Final%20Submission/ProblemSet4_final.html)
+[View html](https://htmlpreview.github.io/?https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/problemSet%204/Final%20Submission/ProblemSet4_final.html)
 
 [View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/problemSet%204/Final%20Submission)
