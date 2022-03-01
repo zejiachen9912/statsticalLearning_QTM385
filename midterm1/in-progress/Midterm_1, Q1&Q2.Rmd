@@ -376,10 +376,59 @@ model_compare %>% arrange(model_compare$RMSE) %>% top_n(10)
 ## Validation
 
 ```{r}
+trn_x <- as.matrix(df_train[,-58])
+trn_y <- as.matrix(df_train$shares)
+
 tst_x <- as.matrix(df_test[,-58])
+tst_x_df <- df_test[,-58]
 tst_y <- as.matrix(df_test$shares)
 ```
 
+**Linear Prediction**
+```{r}
+prediction.linear <- predict(lm_fit, newdata = tst_x_df)
+```
+
+**KNN Prediction**
+```{r}
+prediction.KNN <- predict(knn_fit, newdata = tst_x_df)
+```
+
+**LASSO**
+```{r}
+fit.LASSO <- glmnet::glmnet(trn_x, trn_y, alpha = 1)
+prediction.LASSO <- predict(fit.LASSO, newx = tst_x, s = fit_cv_LASSO$lambda.1se)
+```
+
+**GAM**
+```{r}
+prediction.GAM <- predict(gam1, newdata = tst_x_df)
+```
+
+**Random Forest**
+```{r}
+prediction.RF <- predict(rf_fit, tst_x_df)
+prediction.RF <- prediction.RF$predictions
+```
+
+**Boosted Random Forest**
+```{r}
+prediction.bRF <- predict(boost_tree_2, newdata = tst_x_df)
+```
+
+Compare the MSE for these predictions
+```{r}
+test.RMSE <- data.frame(Models = c("Linear","KNN","Lasso", "GAM", "Random Forest", "Boosted Rnadom Forest"),
+                       RMSE = c(ModelMetrics::rmse(pred=prediction.linear, actual = df_test$shares),
+                               ModelMetrics::rmse(pred=prediction.KNN, actual = df_test$shares),
+                               ModelMetrics::rmse(pred=prediction.LASSO, actual = df_test$shares),
+                               ModelMetrics::rmse(pred=prediction.GAM, actual = df_test$shares), 
+                               ModelMetrics::rmse(pred=prediction.RF, actual = df_test$shares), 
+                               ModelMetrics::rmse(pred=prediction.bRF, actual = df_test$shares)))
+
+test.RMSE$RMSE <- round(test.RMSE$RMSE, 5)
+test.RMSE %>% arrange(RMSE) 
+```
 
 ---
 # Problem 2
