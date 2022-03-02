@@ -85,9 +85,9 @@ df_test$data_channel_is_viral <- as.integer(df_test$data_channel_is_viral)
 ```{r}
 # dropping variables that might cause collinearity issue
 
-df_train <- subset(df_train, select = -c(is_weekend, LDA_04, url))
+df_train <- subset(df_train, select = -c(is_weekend, LDA_04, url, weekday_is_wednesday))
 
-df_test <- subset(df_test, select = -c(is_weekend, LDA_04, url))
+df_test <- subset(df_test, select = -c(is_weekend, LDA_04, url, weekday_is_wednesday))
 
 ```
 
@@ -150,7 +150,7 @@ knn_fit
 
 plot(knn_fit)
 
-print(paste("RMSE: ", 0.9322533))
+print(paste("RMSE: ", knn_fit$results[3,2]))
 
 ```
 
@@ -164,8 +164,9 @@ varImp %>% arrange(desc(varImp)) %>%top_n(12)
 
 
 **LASSO**
+
 ```{r}
-trn_x <- as.matrix(df_train[,-58])
+trn_x <- as.matrix(df_train[,-57])
 trn_y <- as.matrix(df_train$shares)
 ```
 
@@ -179,7 +180,7 @@ plot(fit_cv_LASSO)
 ```{r}
 fit_cv_LASSO
 
-print(paste("RMSE: ", round(sqrt(0.7711), 5)))
+print(paste("RMSE: ", round(sqrt(0.7677), 5)))
 ```
 
 Let use `1se` to retrieve our ‘significant’ predictors, since it minimize the number of predictor. Since there 50+ predictors, we might want to eliminate as much predictors as possible, preventing any cases of overfitting so that we can reduce as much variance during the validation process. 
@@ -214,7 +215,7 @@ library(mgcv)
 We will just use the top five most positive & negative predictors selected by LASSO.
 
 ```{r}
-gam1<-gam(shares~ global_subjectivity + weekday_is_saturday + weekday_is_sunday
+gam1<-gam(shares~ s(global_subjectivity) + weekday_is_saturday + weekday_is_sunday
           + data_channel_is_socmed + s(LDA_00) + data_channel_is_tech + s(abs_title_subjectivity)
           + s(global_rate_positive_words) 
           + s(min_positive_polarity) + s(LDA_02) + data_channel_is_bus	+ s(LDA_03)
@@ -344,10 +345,10 @@ print(paste("boost_tree_2: ", boost_tree_2$cv.error[1000]))
 round(sqrt(LOOCV), 5)
 
 # knn
-print(0.9322533)
+print(knn_fit$results[3,2])
 
 # LASSO
-round(sqrt(0.7711), 5)
+round(sqrt(0.7676), 5)
 
 # GAM
 round(sqrt(summary(gam1)$sp.criterion), 5)
@@ -361,7 +362,7 @@ round(sqrt(boost_tree_2$cv.error[1000]), 5)
 ```
 
 ```{r}
-RMSE <- c(round(sqrt(LOOCV), 5), 0.93225, round(sqrt(0.7711), 5), 0.89211, 
+RMSE <- c(round(sqrt(LOOCV), 5), knn_fit$results[3,2], round(sqrt(0.7676), 5), 0.89204, 
           round(sqrt(0.720559), 5),
           round(sqrt(boost_tree_2$cv.error[1000]), 5))
 
@@ -376,11 +377,11 @@ model_compare %>% arrange(model_compare$RMSE) %>% top_n(10)
 ## Validation
 
 ```{r}
-trn_x <- as.matrix(df_train[,-58])
+trn_x <- as.matrix(df_train[,-57])
 trn_y <- as.matrix(df_train$shares)
 
-tst_x <- as.matrix(df_test[,-58])
-tst_x_df <- df_test[,-58]
+tst_x <- as.matrix(df_test[,-57])
+tst_x_df <- df_test[,-57]
 tst_y <- as.matrix(df_test$shares)
 ```
 
@@ -439,9 +440,87 @@ test.RMSE %>% arrange(RMSE)
 ---
 # Saving the Model
 
-```{r}
+Since *Random Forest` has the best test set performance, we will use it as our team's Big Preictive Model
 
+```{r}
+# the train&test set
+df_train <- read.csv("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/midterm1_train.csv")
+df_test <- read.csv("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/midterm1_testProto.csv")
+# data preprocessing
+df_train$shares = log(df_train$shares)
+df_test$shares = log(df_test$shares)
+
+# adding the `viral content category` variable
+df_train$data_channel_is_viral = df_train$data_channel_is_lifestyle
+
+for (i in 1:nrow(df_train)){
+  if (df_train[i, "data_channel_is_lifestyle"] == 0 &
+      df_train[i, "data_channel_is_entertainment"] == 0 &
+      df_train[i, "data_channel_is_bus"] == 0 &
+      df_train[i, "data_channel_is_socmed"] == 0 &
+      df_train[i, "data_channel_is_tech"] == 0 &
+      df_train[i, "data_channel_is_world"] == 0){
+    
+        df_train[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_train[i, "data_channel_is_viral"] = 0
+      }
+}
+
+df_train$data_channel_is_viral <- as.integer(df_train$data_channel_is_viral)
+
+
+df_test$data_channel_is_viral = df_test$data_channel_is_lifestyle
+
+for (i in 1:nrow(df_test)){
+  if (df_test[i, "data_channel_is_lifestyle"] == 0 &
+      df_test[i, "data_channel_is_entertainment"] == 0 &
+      df_test[i, "data_channel_is_bus"] == 0 &
+      df_test[i, "data_channel_is_socmed"] == 0 &
+      df_test[i, "data_channel_is_tech"] == 0 &
+      df_test[i, "data_channel_is_world"] == 0){
+    
+        df_test[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_test[i, "data_channel_is_viral"] = 0
+      }
+}
+
+df_test$data_channel_is_viral <- as.integer(df_test$data_channel_is_viral)
+
+
+# dropping variables that might cause collinearity issue
+
+df_train <- subset(df_train, select = -c(is_weekend, LDA_04, url, weekday_is_wednesday))
+
+df_test <- subset(df_test, select = -c(is_weekend, LDA_04, url, weekday_is_wednesday))
+
+# model training - Random Forest
+library(ranger)
+set.seed(1234)
+rf_fit <- ranger(shares ~ ., data = df_train, mtry = floor(sqrt(ncol(df_train) - 1)), num.trees = 1000)
+
+
+# saving the model
+saveRDS(rf_fit, "q1_midterm_predict.rds")
+```
+
+```{r}
+# testing function
+q1_midterm1_predict <- function(train, test) {
+  pred = predict(train, test)
+  return(pred$prediction)
+}
 ```
 
 
+```{r}
+# Read the model object back in
+pred_mod_rf <- readRDS("q1_midterm_predict.rds")
+
+# It works
+q1_midterm1_predict(train = pred_mod_rf, test = df_test)
+```
 
