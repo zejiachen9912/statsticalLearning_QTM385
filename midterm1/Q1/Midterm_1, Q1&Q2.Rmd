@@ -1,0 +1,491 @@
+---
+title: 'Midterm_1, Q1&Q2'
+author: "Zejia Chen"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  prettydoc::html_pretty:
+    df_print: kable
+    theme: leonids
+    highlight: github
+    toc: no
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+  html_document:
+    toc: no
+    toc_depth: '2'
+    df_print: paged
+  pdf_document:
+    toc: no
+    toc_depth: '2'
+urlcolor: blue
+---
+
+```{r, include=FALSE}
+library(ggplot2)
+library(data.table)
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
+```
+
+
+# Problem 1
+```{r}
+rm(list=ls(all=TRUE))
+setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/Q1")
+df_train <- read.csv("midterm1_train.csv")
+df_test <- read.csv("midterm1_testProto.csv")
+```
+
+Data Cleaning
+```{r}
+# take of log of `share`
+df_train$shares = log(df_train$shares)
+df_test$shares = log(df_test$shares)
+```
+
+```{r}
+# adding the `viral content category` variable
+
+df_train$data_channel_is_viral = df_train$data_channel_is_lifestyle
+
+for (i in 1:nrow(df_train)){
+  if (df_train[i, "data_channel_is_lifestyle"] == 0 &
+      df_train[i, "data_channel_is_entertainment"] == 0 &
+      df_train[i, "data_channel_is_bus"] == 0 &
+      df_train[i, "data_channel_is_socmed"] == 0 &
+      df_train[i, "data_channel_is_tech"] == 0 &
+      df_train[i, "data_channel_is_world"] == 0){
+    
+        df_train[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_train[i, "data_channel_is_viral"] = 0
+      }
+}
+
+df_train$data_channel_is_viral <- as.integer(df_train$data_channel_is_viral)
+
+```
+
+```{r}
+df_test$data_channel_is_viral = df_test$data_channel_is_lifestyle
+
+for (i in 1:nrow(df_test)){
+  if (df_test[i, "data_channel_is_lifestyle"] == 0 &
+      df_test[i, "data_channel_is_entertainment"] == 0 &
+      df_test[i, "data_channel_is_bus"] == 0 &
+      df_test[i, "data_channel_is_socmed"] == 0 &
+      df_test[i, "data_channel_is_tech"] == 0 &
+      df_test[i, "data_channel_is_world"] == 0){
+    
+        df_test[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_test[i, "data_channel_is_viral"] = 0
+      }
+}
+
+df_test$data_channel_is_viral <- as.integer(df_test$data_channel_is_viral)
+```
+
+
+```{r}
+# dropping variables that might cause collinearity issue
+
+df_train <- subset(df_train, select = -c(is_weekend, LDA_04, url))
+
+df_test <- subset(df_test, select = -c(is_weekend, LDA_04, url))
+
+```
+
+Train-test Split
+```{r}
+set.seed(1234)
+
+ind <- sample(2, nrow(df_train), replace = T, prob = c(0.7, 0.3))
+df_train_sample <- df_train[ind == 1, ]
+df_test_sample <- df_train[ind == 2, ]
+```
+
+
+---
+## Model Testing
+```{r}
+library(caret)
+library(glmnet)
+library(dplyr)
+```
+
+
+**Multiple Linear Regression**
+
+`Coefficients: (2 not defined because of singularities)` ??
+
+```{r}
+lm_fit <- lm(shares ~ ., data = df_train_sample)
+
+```
+
+
+```{r}
+coef_df <- data.frame(lm_fit$coefficients)
+colnames(coef_df)[1] <- "coef"
+coef_df$coef <- round(coef_df$coef, 3)
+
+coef_df %>% arrange(desc(coef)) %>%top_n(12)
+```
+
+```{r}
+# saving the model
+saveRDS(lm_fit, "lm_fit.rds")
+```
+
+
+**KNN**
+
+Error: `#Error: vector memory exhausted (limit reached?)`
+
+```{r}
+trControl <- trainControl(method = "cv", number = 10)
+ 
+set.seed(1234)
+ 
+knn_fit <- train(shares ~., data = df_train_sample, method = 'knn',
+              trControl = trControl)
+```
+
+```{r}
+knn_fit
+
+plot(knn_fit)
+```
+
+```{r}
+varImp <- varImp(knn_fit)
+
+varImp <- data.frame(varImp[1])
+
+varImp %>% arrange(desc(varImp)) %>%top_n(12)
+```
+
+```{r}
+# saving the model
+saveRDS(knn_fit, "knn_fit.rds")
+```
+
+
+**LASSO**
+
+```{r}
+trn_x <- as.matrix(df_train_sample[,-58])
+trn_y <- as.matrix(df_train_sample$shares)
+```
+
+
+```{r}
+fit_cv_LASSO<- cv.glmnet(trn_x, trn_y, type.measure = "mse", alpha = 1, family = "gaussian", nfolds = 10)
+
+plot(fit_cv_LASSO)
+```
+
+```{r}
+fit_cv_LASSO
+```
+```{r}
+# saving the model
+saveRDS(fit_cv_LASSO, "LASSO_fit.rds")
+```
+
+Let use `1se` to retrieve our ‘significant’ predictors, since it minimize the number of predictor. Since there 50+ predictors, we might want to eliminate as much predictors as possible, preventing any cases of overfitting so that we can reduce as much variance during the validation process. 
+```{r}
+
+coef_optim_LASSO <- coef(fit_cv_LASSO, s= fit_cv_LASSO$lambda.1se)
+
+```
+
+```{r}
+theme_set(theme_bw())
+coef_df <- as.data.frame(summary(coef_optim_LASSO))
+col_names_df <- rbind(c("Intercept", 0),data.frame(colnames(trn_x)))
+# saving all leftover significant predictors
+coef_shrink <- col_names_df[c(coef_df$i),1]
+coef_df <- cbind(coef_shrink, coef_df)
+coef_df <- coef_df[,-c(2,3)]
+colnames(coef_df)[1] <- "predictors"
+colnames(coef_df)[2] <- "coef"
+coef_df$coef <- round(coef_df$coef, 7)
+
+coef_df %>% arrange(desc(coef)) %>% top_n(12)
+coef_df %>% arrange(coef) %>% top_n(-10)
+
+```
+
+**GAM**
+```{r}
+library(mgcv)
+```
+
+We will just use the top five most positive & negative predictors selected by LASSO.
+
+```{r}
+gam2 <- gam(shares ~ s(kw_avg_avg) + s(kw_min_avg) + s(LDA_02) + s(self_reference_avg_sharess) +
+            data_channel_is_viral + s(global_subjectivity) + s(self_reference_min_shares) +
+            s(self_reference_max_shares),
+            data = df_train_sample)
+plot(gam2, pages = 1)
+```
+```{r}
+round(sqrt(summary(gam2)$sp.criterion), 5)
+```
+
+
+
+```{r}
+gam1<-gam(shares~ s(global_subjectivity) + weekday_is_saturday + weekday_is_sunday + s(kw_min_avg)
+          + data_channel_is_socmed + s(LDA_00) + s(rate_positive_words)
+          + s(global_rate_negative_words)
+          + s(global_rate_positive_words) + s(LDA_02) + min_positive_polarity
+          +  data_channel_is_entertainment + s(global_sentiment_polarity)
+          + s(avg_negative_polarity), data=df_train_sample)
+
+plot(gam1, pages = 1)
+```
+
+```{r}
+round(sqrt(summary(gam1)$sp.criterion), 5)
+```
+
+```{r}
+# saving the model
+saveRDS(gam1, "GAM_LASSO.rds")
+saveRDS(gam2, "GAM_combine.rds")
+```
+
+
+**Bagged Tree**
+```{r}
+library(ranger)
+```
+
+```{r}
+bagged_tree <- ranger(shares ~ ., data = df_train_sample, mtry = ncol(df_train_sample) - 1, num.trees = 1000)
+```
+
+```{r}
+# saving the model
+saveRDS(bagged_tree, "bagged_tree.rds")
+```
+
+
+**Random Forest**
+
+```{r}
+set.seed(1234)
+
+rf_fit <- ranger(shares ~ ., data = df_train_sample, mtry = floor(sqrt(ncol(df_train) - 1)), num.trees = 1000)
+```
+
+```{r}
+rf_fit
+```
+
+```{r}
+# saving the model
+saveRDS(rf_fit, "rf.rds")
+```
+
+Variable Importance
+```{r}
+rf_fit2 <- ranger(shares ~ ., data = df_train_sample, mtry = floor(sqrt(ncol(df_train) - 1)), 
+                  num.trees = 1000, importance = 'permutation')
+rf_fit3 <- ranger(shares ~ ., data = df_train_sample, mtry = floor(sqrt(ncol(df_train) - 1)), 
+                  num.trees = 1000, importance = 'impurity')
+```
+```{r}
+# saving the model
+saveRDS(rf_fit2, "rf_permutation.rds")
+saveRDS(rf_fit3, "rf_impurity.rds")
+```
+
+
+```{r}
+colnames <- colnames(df_train)
+colnames <- colnames[-58]
+
+rf_fit2_varImp <- data.frame(rf_fit2$variable.importance)
+rf_fit2_varImp$Predictors <- colnames
+colnames(rf_fit2_varImp)[1] <- "Importance"
+rf_fit2_top <- rf_fit2_varImp %>% arrange(desc(rf_fit2_varImp))
+rf_fit2_top <- rf_fit2_top[1:15,]
+
+
+rf_fit3_varImp <- data.frame(rf_fit3$variable.importance)
+rf_fit3_varImp$Predictors <- colnames
+colnames(rf_fit3_varImp)[1] <- "Importance"
+rf_fit3_top <- rf_fit3_varImp %>% arrange(desc(rf_fit3_varImp))
+rf_fit3_top <- rf_fit3_top[1:15,]
+```
+
+```{r}
+fit1 <- ggplot(rf_fit2_top, aes(x=reorder(Predictors,-Importance), y=Importance, label=round(Importance, 3))) + 
+  geom_point(col="tomato2", size=3) +   # Draw points
+  geom_segment(aes(x=Predictors, 
+                   xend=Predictors, 
+                   y=min(Importance), 
+                   yend=max(Importance)), 
+               linetype="dashed", 
+               size=0.1) +   # Draw dashed lines
+  labs(title="Variable Importance", y = "Importance", x = "Predictors") +  
+  coord_flip()
+```
+
+```{r}
+fit2 <- ggplot(rf_fit3_top, aes(x=reorder(Predictors,-Importance), y=Importance, label=round(Importance, 3))) + 
+  geom_point(col="tomato2", size=3) +   # Draw points
+  geom_segment(aes(x=Predictors, 
+                   xend=Predictors, 
+                   y=min(Importance), 
+                   yend=max(Importance)), 
+               linetype="dashed", 
+               size=0.1) +   # Draw dashed lines
+  labs(title="Variable Importance", y = "Importance", x = "Predictors") +  
+  coord_flip()
+```
+
+
+```{r}
+library("ggpubr")
+ggarrange(fit1, fit2,
+          labels = c("Permutation", "Impurity"))
+```
+
+**Boosted Regression Tree**
+```{r}
+library(gbm)
+```
+
+```{r}
+set.seed(1234)
+
+boost_tree_1 <- gbm(shares ~., data = df_train_sample, distribution = "gaussian", 
+                    n.trees = 1000, interaction.depth = 1, shrinkage = 0.005, bag.fraction = 1, cv.folds = 5)
+
+boost_tree_2 <- gbm(shares ~., data = df_train_sample, distribution = "gaussian", 
+                    n.trees = 1000, interaction.depth = 2, shrinkage = 0.005, bag.fraction = 1, cv.folds = 5)
+```
+
+```{r}
+# saving the model
+saveRDS(boost_tree_1, "boost_tree_1(interaction.depth=1).rds")
+saveRDS(boost_tree_2, "boost_tree_2(interaction.depth=2).rds")
+```
+
+
+```{r}
+# importance measure
+df <- data.frame(summary(boost_tree_1, plotit = FALSE))
+df %>% arrange(desc(df$rel.inf)) %>% top_n(10)
+
+df <- data.frame(summary(boost_tree_2, plotit = FALSE))
+df %>% arrange(desc(df$rel.inf)) %>% top_n(10)
+
+
+# CV estimate of EPE at each step
+plot(seq(1, 1000), boost_tree_1$cv.error, type = "l")
+plot(seq(1, 1000), boost_tree_2$cv.error, type = "l")
+```
+
+```{r}
+print(paste("boost_tree_1: ", boost_tree_1$cv.error[1000]))
+print(paste("boost_tree_2: ", boost_tree_2$cv.error[1000]))
+
+```
+
+
+---
+# Saving the Model
+
+Since *Random Forest` has the best test set performance, we will use it as our team's Big Preictive Model
+
+```{r}
+# # the train&test set
+# df_train <- read.csv("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/midterm1_train.csv")
+# df_test <- read.csv("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/midterm1_testProto.csv")
+# # data preprocessing
+# df_train$shares = log(df_train$shares)
+# df_test$shares = log(df_test$shares)
+# 
+# # adding the `viral content category` variable
+# df_train$data_channel_is_viral = df_train$data_channel_is_lifestyle
+# 
+# for (i in 1:nrow(df_train)){
+#   if (df_train[i, "data_channel_is_lifestyle"] == 0 &
+#       df_train[i, "data_channel_is_entertainment"] == 0 &
+#       df_train[i, "data_channel_is_bus"] == 0 &
+#       df_train[i, "data_channel_is_socmed"] == 0 &
+#       df_train[i, "data_channel_is_tech"] == 0 &
+#       df_train[i, "data_channel_is_world"] == 0){
+#     
+#         df_train[i, "data_channel_is_viral"] = 1
+#         
+#   } else{
+#         df_train[i, "data_channel_is_viral"] = 0
+#       }
+# }
+# 
+# df_train$data_channel_is_viral <- as.integer(df_train$data_channel_is_viral)
+# 
+# 
+# df_test$data_channel_is_viral = df_test$data_channel_is_lifestyle
+# 
+# for (i in 1:nrow(df_test)){
+#   if (df_test[i, "data_channel_is_lifestyle"] == 0 &
+#       df_test[i, "data_channel_is_entertainment"] == 0 &
+#       df_test[i, "data_channel_is_bus"] == 0 &
+#       df_test[i, "data_channel_is_socmed"] == 0 &
+#       df_test[i, "data_channel_is_tech"] == 0 &
+#       df_test[i, "data_channel_is_world"] == 0){
+#     
+#         df_test[i, "data_channel_is_viral"] = 1
+#         
+#   } else{
+#         df_test[i, "data_channel_is_viral"] = 0
+#       }
+# }
+# 
+# df_test$data_channel_is_viral <- as.integer(df_test$data_channel_is_viral)
+# 
+# 
+# # dropping variables that might cause collinearity issue
+# 
+# df_train <- subset(df_train, select = -c(is_weekend, LDA_04, url, weekday_is_wednesday))
+# 
+# df_test <- subset(df_test, select = -c(is_weekend, LDA_04, url, weekday_is_wednesday))
+# 
+# # model training - Random Forest
+# library(ranger)
+# set.seed(1234)
+# rf_fit <- ranger(shares ~ ., data = df_train, mtry = floor(sqrt(ncol(df_train) - 1)), num.trees = 1000)
+# 
+# 
+# # saving the model
+# saveRDS(rf_fit, "q1_midterm_predict.rds")
+```
+
+```{r}
+# # testing function
+# q1_midterm1_predict <- function(train, test) {
+#   pred = predict(train, test)
+#   return(pred$prediction)
+# }
+```
+
+
+```{r}
+# # Read the model object back in
+# pred_mod_rf <- readRDS("q1_midterm_predict.rds")
+# 
+# # It works
+# q1_midterm1_predict(train = pred_mod_rf, test = df_test)
+```
+
