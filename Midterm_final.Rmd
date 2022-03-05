@@ -1,8 +1,11 @@
 ---
-title: 'Midterm Project'
+title: "Midterm Project"
 author: "Zejia Chen, Francis Lin, Xuanyang Lin"
-date: '`r format(Sys.Date(), "%B %d, %Y")`'
+date: "February 16th, 2022"
 output:
+  pdf_document:
+    toc: no
+    toc_depth: '2'
   prettydoc::html_pretty:
     df_print: kable
     theme: leonids
@@ -11,15 +14,9 @@ output:
     toc_depth: 2
     toc_float:
       collapsed: no
-  html_document:
-    toc: no
-    toc_depth: '2'
-    df_print: paged
-  pdf_document:
-    toc: no
-    toc_depth: '2'
 urlcolor: blue
 ---
+
 
 ```{r, include=FALSE, message=F}
 library(ggplot2)
