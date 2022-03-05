@@ -40,7 +40,6 @@ knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 1
 
 # Problem 1
 ```{r}
-setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
 df_train <- read.csv("midterm1_train.csv")
 df_proto.test <- read.csv("midterm1_testProto.csv")
 ```
@@ -769,7 +768,7 @@ The models that we are considering are linear regression, KNN, GAM and regressio
 We make an exhaustive search on our predictor space: trying out every possible predictors for each type of model (lm, KNN, GAM). We split the data into training and testing, and select the model based on cross validation estimates. We select the model with smallest CV estimate of prediction error.
 
 ```{r}
-setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+
 rm(list=ls(all=TRUE))
 df_train <- read.csv("midterm1_train.csv")
 df_test <- read.csv("midterm1_testProto.csv")
@@ -1083,7 +1082,7 @@ q1_midterm1_predict <- function(train, test, seed) {
 
 Testing the function
 ```{r}
-setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+
 df_train <- read.csv("midterm1_train.csv")
 df_proto.test <- read.csv("midterm1_testProto.csv")
 ```
@@ -1127,7 +1126,7 @@ q3_midterm1_predict <- function(train, test, seed){
 Test the prediction function
 
 ```{r, message=F}
-setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+
 df_train <- read.csv("midterm1_train.csv")
 df_proto.test <- read.csv("midterm1_testProto.csv")
 q3_midterm1_predict(df_train, df_proto.test,1234)
@@ -1158,7 +1157,7 @@ q5_midterm1_predict <- function(test, train, seed){
 
 Test the function.
 ```{r}
-setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+
 df_train <- read.csv("midterm1_train.csv")
 df_test <- read.csv("midterm1_testProto.csv")
 q5_midterm1_predict(df_test,df_train,1234)
