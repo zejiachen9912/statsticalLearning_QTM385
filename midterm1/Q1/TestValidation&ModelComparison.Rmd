@@ -28,7 +28,6 @@ knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 1
 ```
 
 
-# Problem 1
 ```{r}
 rm(list=ls(all=TRUE))
 setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/Q1")
@@ -119,6 +118,10 @@ bagged_tree <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearnin
 rf_fit <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/rf.rds")
 boost_tree_1 <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/boost_tree_1(interaction.depth=1).rds")
 boost_tree_2 <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/boost_tree_2(interaction.depth=2).rds")
+```
+
+```{r}
+round(sqrt(summary(gam_LASSO)$sp.criterion), 5)
 ```
 
 
@@ -215,6 +218,7 @@ prediction.baggedTree <- prediction.baggedTree$predictions
 prediction.RF <- predict(rf_fit, tst_x_df)
 prediction.RF <- prediction.RF$predictions
 ```
+
 
 **Boosted Random Forest**
 ```{r}
