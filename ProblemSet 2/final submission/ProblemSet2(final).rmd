@@ -23,14 +23,6 @@ library(data.table)
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
 ```
 
-This is the second problem set for QTM 385 - Intro to Statistical Learning.  This homework will cover applied exercises related to validation sets, loss functions, and linear regression.
-
-Please use the intro to RMarkdown posted in the Intro module and my .Rmd file as a guide for writing up your answers.  You can use any language you want, but I think that a number of the computational problems are easier in R.  Please post any questions about the content of this problem set or RMarkdown questions to the corresponding discussion board.
-
-Your final deliverable should be a .zip archive that includes a .Rmd/.ipynb file and either a rendered HTML file or a PDF.  Students can complete this assignment in groups of up to 3.  Please identify your collaborators at the top of your document.  All students should turn in a copy of the solutions, but your solutions can be identical to those of your collaborators.
-
-This assignment is due by February 4th, 2022 at 11:59 PM EST.  
-
 ***
 
 `taiwanPricing_train.csv`, `taiwanPricing_test1.csv`, and `taiwanPricing_test2.csv` are data sets that include information about real estate valuation in Sindian District, New Taipei City, Taiwan.  The training data has 314 instances of property value (`Price`) in New Taiwan Dollars per 3.3 meters squared, observation IDs (`ID`), and 7 predictors:

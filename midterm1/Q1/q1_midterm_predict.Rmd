@@ -1,0 +1,103 @@
+---
+title: "q1_midterm_predict"
+author: "Zejia Chen 2325406"
+date: "3/3/2022"
+output: html_document
+---
+
+```{r}
+q1_midterm1_predict <- function(train, test) {
+  
+  print("proprocessing the data...")
+  
+  # reshape the train set to fit the model
+  train$shares = log(train$shares)
+  test$shares = log(test$shares)
+  
+    # adding the `viral content category` variable
+  train$data_channel_is_viral = train$data_channel_is_lifestyle
+  for (i in 1:nrow(train)){
+    if (train[i, "data_channel_is_lifestyle"] == 0 &
+        train[i, "data_channel_is_entertainment"] == 0 &
+        train[i, "data_channel_is_bus"] == 0 &
+        train[i, "data_channel_is_socmed"] == 0 &
+        train[i, "data_channel_is_tech"] == 0 &
+        train[i, "data_channel_is_world"] == 0){
+      
+          train[i, "data_channel_is_viral"] = 1
+          
+    } else{
+          train[i, "data_channel_is_viral"] = 0
+        }
+  }
+  train$data_channel_is_viral <- as.integer(train$data_channel_is_viral)
+  
+  df_test$data_channel_is_viral = df_test$data_channel_is_lifestyl
+  for (i in 1:nrow(test)){
+    if (test[i, "data_channel_is_lifestyle"] == 0 &
+        test[i, "data_channel_is_entertainment"] == 0 &
+        test[i, "data_channel_is_bus"] == 0 &
+        test[i, "data_channel_is_socmed"] == 0 &
+        test[i, "data_channel_is_tech"] == 0 &
+        test[i, "data_channel_is_world"] == 0){
+      
+          test[i, "data_channel_is_viral"] = 1
+          
+    } else{
+          test[i, "data_channel_is_viral"] = 0
+        }
+  }
+  test$data_channel_is_viral <- as.integer(test$data_channel_is_viral)
+    
+    # dropping variables
+  train <- subset(train, select = -c(is_weekend, LDA_04, url))
+  test <- subset(test, select = -c(is_weekend, LDA_04, url))
+  
+  # model training - Random Forest
+  library(ranger)
+  set.seed(1234)
+  rf_fit <- ranger(shares ~ ., data = train, mtry = floor(sqrt(ncol(train) - 1)), num.trees = 1000)
+  
+  pred = predict(rf_fit, test)
+  return(pred$prediction)
+  
+}
+```
+
+
+## Testing
+```{r}
+setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/Q1")
+df_train <- read.csv("midterm1_train.csv")
+df_test <- read.csv("midterm1_testProto.csv")
+```
+
+```{r}
+pred <- q1_midterm1_predict(df_train, df_test)
+```
+
+```{r}
+pred
+```
+
+---
+## Interpretation
+
+After evaluating a total of nine models, random forest, not surprisingly, becomes the best model to predict article popularity with the least RMSE.
+
+However, such selection comes with a cost of interpretability. We don't really understand the effect that each predictor have on the article popularity except knowing the variable importance of the predictor.
+
+Here comes the trade-off, precision vs. interpretability. Depending on the goal of the assignment, we may want to pivot to one versus the other. Nevertheless, in this midterm analysis, our ultimate goal is to build a precious model with one / a subset of predictors.
+
+In that sense, it is apposite to use randome forest in the first part and evaluate the variable importance to make the subsequent predictor selection process a little bit easier. 
+
+According the random forest predictor evaluation,`kw_max_avg` [Avg. keyword (max. shares)], `self_reference_avg_sharess` [Avg. shares of referenced articles in Mashable], `LDA_02` [Closeness to LDA topic 2] stand out to be some of the most significant predictors for determining the Mashable article's popularity. In addition, variable importance evaluated by other models (LASSO, KNN, Boosted Random Forest) more or less agree to this result. 
+
+From a granular perspective, we can somewhat deduce that there are three major factors that determine a article's popularity in Mashable. 
+
+1. Avg. Keyword of the article
+2. Shares of referenced articles
+3. The topic of the article
+
+And we can certainly start to get into the detail of these three area if we would love to investigate further about factors that are affecting Mashable article's popularity.
+

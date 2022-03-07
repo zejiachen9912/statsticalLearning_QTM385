@@ -1,0 +1,247 @@
+---
+title: 'Test Validation & Model Comparison'
+author: "Zejia Chen"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document:
+    toc: no
+    toc_depth: '2'
+    df_print: paged
+  prettydoc::html_pretty:
+    df_print: kable
+    theme: leonids
+    highlight: github
+    toc: no
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+  pdf_document:
+    toc: no
+    toc_depth: '2'
+urlcolor: blue
+---
+
+```{r, include=FALSE}
+library(ggplot2)
+library(data.table)
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
+```
+
+
+```{r}
+rm(list=ls(all=TRUE))
+setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/midterm1/Q1")
+df_train <- read.csv("midterm1_train.csv")
+df_test <- read.csv("midterm1_testProto.csv")
+```
+
+Data Cleaning
+```{r}
+# take of log of `share`
+df_train$shares = log(df_train$shares)
+df_test$shares = log(df_test$shares)
+```
+
+```{r}
+# adding the `viral content category` variable
+
+df_train$data_channel_is_viral = df_train$data_channel_is_lifestyle
+
+for (i in 1:nrow(df_train)){
+  if (df_train[i, "data_channel_is_lifestyle"] == 0 &
+      df_train[i, "data_channel_is_entertainment"] == 0 &
+      df_train[i, "data_channel_is_bus"] == 0 &
+      df_train[i, "data_channel_is_socmed"] == 0 &
+      df_train[i, "data_channel_is_tech"] == 0 &
+      df_train[i, "data_channel_is_world"] == 0){
+    
+        df_train[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_train[i, "data_channel_is_viral"] = 0
+      }
+}
+
+df_train$data_channel_is_viral <- as.integer(df_train$data_channel_is_viral)
+
+```
+
+```{r}
+df_test$data_channel_is_viral = df_test$data_channel_is_lifestyle
+
+for (i in 1:nrow(df_test)){
+  if (df_test[i, "data_channel_is_lifestyle"] == 0 &
+      df_test[i, "data_channel_is_entertainment"] == 0 &
+      df_test[i, "data_channel_is_bus"] == 0 &
+      df_test[i, "data_channel_is_socmed"] == 0 &
+      df_test[i, "data_channel_is_tech"] == 0 &
+      df_test[i, "data_channel_is_world"] == 0){
+    
+        df_test[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_test[i, "data_channel_is_viral"] = 0
+      }
+}
+
+df_test$data_channel_is_viral <- as.integer(df_test$data_channel_is_viral)
+```
+
+
+```{r}
+# dropping variables that might cause collinearity issue
+
+df_train <- subset(df_train, select = -c(is_weekend, LDA_04, url))
+
+df_test <- subset(df_test, select = -c(is_weekend, LDA_04, url))
+
+```
+
+Train-test Split
+```{r}
+set.seed(1234)
+
+ind <- sample(2, nrow(df_train), replace = T, prob = c(0.7, 0.3))
+df_train_sample <- df_train[ind == 1, ]
+df_test_sample <- df_train[ind == 2, ]
+```
+
+## Loading Models
+
+```{r}
+lm_fit <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/lm_fit.rds")
+knn_fit <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/knn_fit.rds")
+LASSO_fit <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/LASSO_fit.rds")
+gam_LASSO <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/GAM_LASSO.rds")
+gam_combined <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/GAM_combine.rds")
+bagged_tree <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/bagged_tree.rds")
+rf_fit <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/rf.rds")
+boost_tree_1 <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/boost_tree_1(interaction.depth=1).rds")
+boost_tree_2 <- readRDS("/Users/zejiachen/Desktop/Sspring 2022/StatisticalLearning - Midterm1 - Models_Q1/boost_tree_2(interaction.depth=2).rds")
+```
+
+```{r}
+round(sqrt(summary(gam_LASSO)$sp.criterion), 5)
+```
+
+
+## Comparison between different models
+
+
+```{r}
+# linear
+LOOCV <- mean((lm_fit$residuals/(1-hatvalues(lm_fit)))^2)
+lm_RMSE <- round(sqrt(LOOCV), 5)
+
+# knn
+knn_RMSE <- knn_fit$results[3,2]
+
+# LASSO
+LASSO_RMSE <- round(sqrt(0.7878), 5)
+
+# GAM_LASSO
+GAM_LASSO_RMSE <- round(sqrt(summary(gam_LASSO)$sp.criterion), 5)
+
+# GAM_Combine
+GAM_Combine_RMSE <- round(sqrt(summary(gam_combined)$sp.criterion), 5)
+
+# bagged_tree
+baggedTree_RMSE <- round(sqrt(0.7318782), 5)
+
+# RF
+rf_RMSE <- round(sqrt(0.7232391), 5)
+
+# bRF_1
+boostedRF1_RMSE <- round(sqrt(boost_tree_1$cv.error[1000]), 5)
+
+# bRF_2
+boostedRF2_RMSE <- round(sqrt(boost_tree_2$cv.error[1000]), 5)
+
+```
+
+```{r}
+RMSE <- c(lm_RMSE, knn_RMSE, LASSO_RMSE, 
+          GAM_LASSO_RMSE, GAM_Combine_RMSE, baggedTree_RMSE, 
+          rf_RMSE, boostedRF1_RMSE, boostedRF2_RMSE)
+
+Model <- c('Linear', 'KNN', 'LASSO', 
+           'GAM_LASSO', 'GAM_combined', 'Bagged Tree', 'Random Forest', 'Boosted Random Forest (1)',
+           'Boosted Random Forest (2)')
+```
+
+```{r}
+model_compare <- data.frame(Model, RMSE)
+model_compare %>% arrange(model_compare$RMSE)
+```
+
+## Validation
+
+```{r}
+trn_x <- as.matrix(df_train_sample[,-58])
+trn_y <- as.matrix(df_train_sample$shares)
+
+tst_x <- as.matrix(df_test_sample[,-58])
+tst_y <- as.matrix(df_test_sample$shares)
+tst_x_df <- df_test_sample[,-58]
+```
+
+**Linear Prediction**
+```{r}
+prediction.linear <- predict(lm_fit, newdata = tst_x_df)
+```
+
+**KNN Prediction**
+```{r}
+prediction.KNN <- predict(knn_fit, newdata = tst_x_df)
+```
+
+**LASSO**
+```{r}
+fit.LASSO <- glmnet::glmnet(trn_x, trn_y, alpha = 1)
+prediction.LASSO <- predict(fit.LASSO, newx = tst_x, s = LASSO_fit$lambda.1se)
+```
+
+**GAM_LASSO & GAM_Combined**
+```{r}
+prediction.GAM_LASSO <- predict(gam_LASSO, newdata = tst_x_df)
+prediction.GAM_Combined <- predict(gam_combined, newdata = tst_x_df)
+```
+
+**Bagged Tree**
+```{r}
+prediction.baggedTree <- predict(bagged_tree, tst_x_df)
+prediction.baggedTree <- prediction.baggedTree$predictions
+```
+
+**Random Forest**
+```{r}
+prediction.RF <- predict(rf_fit, tst_x_df)
+prediction.RF <- prediction.RF$predictions
+```
+
+
+**Boosted Random Forest**
+```{r}
+prediction.bRF_1 <- predict(boost_tree_1, newdata = tst_x_df)
+prediction.bRF_2 <- predict(boost_tree_2, newdata = tst_x_df)
+```
+
+Compare the MSE for these predictions
+```{r}
+test.RMSE <- data.frame(Models = c("Linear","KNN","Lasso", "GAM_LASSO",
+                                   "GAM_Combined", "Bagged Tree", "Random Forest",
+                                   "Boosted Random Forest(1)", "Boosted Random Forest(2)"),
+                       RMSE = c(ModelMetrics::rmse(pred=prediction.linear, actual = df_test_sample$shares),
+                               ModelMetrics::rmse(pred=prediction.KNN, actual = df_test_sample$shares),
+                               ModelMetrics::rmse(pred=prediction.LASSO, actual = df_test_sample$shares),
+                               ModelMetrics::rmse(pred=prediction.GAM_LASSO, actual = df_test_sample$shares),
+                               ModelMetrics::rmse(pred=prediction.GAM_Combined, actual = df_test_sample$shares),
+                               ModelMetrics::rmse(pred=prediction.baggedTree, actual = df_test_sample$shares),
+                               ModelMetrics::rmse(pred=prediction.RF, actual = df_test_sample$shares), 
+                               ModelMetrics::rmse(pred=prediction.bRF_1, actual = df_test_sample$shares),
+                               ModelMetrics::rmse(pred=prediction.bRF_2, actual = df_test_sample$shares)))
+
+test.RMSE$RMSE <- round(test.RMSE$RMSE, 5)
+test.RMSE %>% arrange(RMSE) 
+```
+
