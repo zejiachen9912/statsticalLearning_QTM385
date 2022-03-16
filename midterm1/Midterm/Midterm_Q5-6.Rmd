@@ -1,0 +1,485 @@
+---
+title: 'Midterm_1, Q5-Q6'
+author: "Zejia Chen, Francis Lin, Mike Lin"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  prettydoc::html_pretty:
+    df_print: kable
+    theme: leonids
+    highlight: github
+    toc: no
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+  html_document:
+    toc: no
+    toc_depth: '2'
+    df_print: paged
+  pdf_document:
+    toc: no
+    toc_depth: '2'
+urlcolor: blue
+---
+
+```{r, include=FALSE, message=F}
+library(ggplot2)
+library(dplyr)
+library(data.table)
+library(glmnet)
+library(plotmo)
+library(caret)
+library(vip)
+library(randomForest)
+library(ModelMetrics)
+library(mgcv)
+library(caTools)
+library(stringr)
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
+```
+
+
+## Question 5 - Building a Predictive Model with a Single Predictor (15 pts.)
+
+Now, take the idea of creating a small actionable predictive model to the extreme and find the single predictor model that minimizes expected prediction error for log of shares on the unseen test data set.  Discuss your process and how you decided on a final model.  Create a plot that shows your predictive curve for the training data **and** for a test set that was not used to train the model (a hint about the process you should take for all of the questions).  How does the predictive surface for your single predictor compare to the equivalent impact of the predictor in the subset and full models?  Can you intuitively explain this result? 
+
+Once you decide on a final model, write a function called `q5_midterm1_predict` that takes 4 arguments:
+
+  1. `test` - a $N_{test} \times P$ matrix, data frame, or other type of reasonable object that includes the new set of 58 predictors (and potentially other covariates) included in your training data.  You should be able to pass the prototype test set included with this assignment to `test`.
+  
+  2. `train` - a $N_{train} \times P$ matrix, data frame, or other type of reasonable object that includes the set of 58 predictors (and potentially other covariates) included in your training data **or** a fitted model object.  If `train` is a matrix or data frame, you should be able to pass the entire training data in its first read form (as a data frame, for example) to `train`.  If `train` is a model object, please indicate through comments in your code which model object should be passed to the function.
+  
+  3. `seed` - a random seed that can be used to ensure that the fitting procedure is identical across function calls and computers.
+  
+Your function should train the model on `train` and produce $N_{Test}$ predictions for the `test` observations.  Your function should only return those predictions as a vector or equivalent data type.
+
+Points for this question will be allocated as follows:
+
+  1. 7 points for demonstrating a robust exploration over different possible methods of training the model considering both variable selection and potential nonlinearities.
+  
+  2. 3 points for a meaningful discussion of how you compared the potential models and ultimately chose your single predictor.
+  
+  3. 5 points for comparison of variable impact across models and discussion of logic for differences.
+
+
+
+# Problem 5
+
+The models that we are considering are linear regression, KNN, GAM and regression tree. However, since regression tree on a single predictor is overly sinple and very high in bias, the prediction error is expected to be very high. So, we exclude regression tree in our list. So, the models to consider are linear regression, GAM and KNN. In specific, linear regression fits a linear model, and GAM handles nonlinearity in the relationship between predictor and outcome.
+
+We make an exhaustive search on our predictor space: trying out every possible predictors for each type of model (lm, KNN, GAM). We split the data into training and testing, and select the model based on cross validation estimates. We select the model with smallest CV estimate of prediction error.
+
+```{r}
+setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+rm(list=ls(all=TRUE))
+df_train <- read.csv("midterm1_train.csv")
+df_test <- read.csv("midterm1_testProto.csv")
+```
+
+**Data Cleaning**
+```{r}
+# take of log of `share`
+df_train$shares = log(df_train$shares)
+df_test$shares = log(df_test$shares)
+```
+
+```{r}
+# adding the `viral content category` variable
+df_train$data_channel_is_viral = df_train$data_channel_is_lifestyle
+for (i in 1:nrow(df_train)){
+  if (df_train[i, "data_channel_is_lifestyle"] == 0 &
+      df_train[i, "data_channel_is_entertainment"] == 0 &
+      df_train[i, "data_channel_is_bus"] == 0 &
+      df_train[i, "data_channel_is_socmed"] == 0 &
+      df_train[i, "data_channel_is_tech"] == 0 &
+      df_train[i, "data_channel_is_world"] == 0){
+    
+        df_train[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_train[i, "data_channel_is_viral"] = 0
+      }
+}
+df_train$data_channel_is_viral <- as.integer(df_train$data_channel_is_viral)
+```
+
+```{r}
+df_test$data_channel_is_viral = df_test$data_channel_is_lifestyle
+for (i in 1:nrow(df_test)){
+  if (df_test[i, "data_channel_is_lifestyle"] == 0 &
+      df_test[i, "data_channel_is_entertainment"] == 0 &
+      df_test[i, "data_channel_is_bus"] == 0 &
+      df_test[i, "data_channel_is_socmed"] == 0 &
+      df_test[i, "data_channel_is_tech"] == 0 &
+      df_test[i, "data_channel_is_world"] == 0){
+    
+        df_test[i, "data_channel_is_viral"] = 1
+        
+  } else{
+        df_test[i, "data_channel_is_viral"] = 0
+      }
+}
+df_test$data_channel_is_viral <- as.integer(df_test$data_channel_is_viral)
+```
+
+
+```{r}
+# dropping variables that might cause collinearity issue
+df_train <- subset(df_train, select = -c(is_weekend, LDA_04, url))
+df_test <- subset(df_test, select = -c(is_weekend, LDA_04, url))
+```
+
+
+**Split 'df_train' into a training set and a testing set**
+
+```{r}
+set.seed(1234)
+v <- as.vector(c(rep(TRUE,80),rep(FALSE,20))) 
+ind <- sample(v)  
+df_train_train <- df_train[ind, ] 
+df_train_test <- df_train[!ind, ] 
+```
+
+
+**Linear Regression**
+
+```{r}
+library(lmvar)
+for (var in colnames(df_train_train)){
+  if (var!='shares'){
+    f<-formula(paste('shares','~',var))
+    lm_fit_q5<-lm(f,data=df_train_train,x=TRUE,y=TRUE)
+    cv_lm_fit_q5<-cv.lm(df=df_train_train,lm_fit_q5,k=10)
+    print(paste(var,':',cv_lm_fit_q5$MSE$mean))
+    
+  }
+}
+
+
+```
+
+'kw_avg_avg' has lowest LOOCV error, so the best predictor is'kw_avg_avg'.
+
+**KNN**
+
+```{r}
+rmse<-c()
+vars<-c()
+var_for_knn<-c('timedelta','n_tokens_content','n_unique_tokens','n_non_stop_unique_tokens','average_token_length','LDA_00','LDA_01','LDA_02', 'LDA_03','global_subjectivity', 'global_sentiment_polarity', 'global_rate_positive_words')
+trControl <- trainControl(method = "cv", number = 10)
+for (var in colnames(df_train_train)){ 
+  if ((var %in% var_for_knn)){
+    f<-formula(paste('shares','~',var))
+    knn_fit <- train(f, data = df_train_train, method = 'knn',
+              trControl = trControl)
+    rmse<-c(rmse,min(knn_fit$results$RMSE))
+    vars<-c(vars,var)
+    
+  } 
+}
+print(paste("The lowest RMSE for KNN: ",min(rmse)))
+```
+
+
+**GAM**
+
+```{r}
+library(mgcv)
+```
+
+```{r}
+GCV_q5<-c()
+factor_vars <- c('n_non_stop_words','num_videos','data_channel_is_lifestyle', 'data_channel_is_entertainment','data_channel_is_bus','data_channel_is_socmed',
+                 'data_channel_is_tech', 'data_channel_is_world', 'kw_min_min', 'kw_max_min', 'kw_avg_min', 'kw_min_max', 'kw_max_max','kw_avg_max', 'kw_min_avg', 'kw_max_avg', 'kw_avg_avg',
+                 'weekday_is_monday', 'weekday_is_tuesday', 'weekday_is_wednesday','weekday_is_thursday', 'weekday_is_friday', 'weekday_is_saturday', 'weekday_is_sunday','data_channel_is_viral','shares')
+for (var in colnames(df_train_train)){ 
+  if (!(var %in% factor_vars)){
+    gam_fit_q5<-gam(substitute(shares~s(i),list(i=as.name(var))), data=df_train_train)
+    print(paste(var,': ',summary(gam_fit_q5)$sp.criterion))
+  } 
+}
+```
+
+'self_reference_avg_sharess' gives lowest GCV error, so we choose it as predictor for GAM model.
+
+
+
+**Comparison**
+
+```{r}
+print("MSE:")
+# Linear Regression
+print(paste('Linear Regression',round(0.825784601995825, 5)))
+# KNN
+print(paste('KNN',0.9280095^2))
+# GAM
+print(paste('GAM',0.83))
+```
+
+The best single-predictor model is simple linear regression with 'kw_avg_avg'. 
+
+
+```{r}
+best_model<-lm(shares~kw_avg_avg,data=df_train_train)
+best_model
+ggplot(data=df_train_train,aes(x=kw_avg_avg,y=shares))+geom_point()+geom_abline(intercept=best_model$coefficients[1],slope=best_model$coefficients[2])+ggtitle("predictive curve for training set")
+ggplot(data=df_train_test,aes(x=kw_avg_avg,y=shares))+geom_point()+geom_abline(intercept=best_model$coefficients[1],slope=best_model$coefficients[2])+ggtitle("predictive curve for testing set")
+
+```
+
+```{r}
+lm(shares ~ ., data = df_train_train)
+```
+
+On simple linear regression with kw_avg_avg, the coefficient for the predictor is smaller than the coefficient of kw_avg_avg in full linear regression model. The reason may be that The reason may be that single predictor model fails to consider other predictors that may contribute to the outcome. The average keyword in average shares (kw_avg_avg) may be closely correlated with some other predictors that are negatively correlated with the outcome. For example, kw_avg_avg may be positively correlated with best keyword (avgerage shares), while the best keyword (avgerage shares) is negatively correlated with outcome, which decreases the coefficient value for kw_avg_avg in single-predictor model.
+
+
+```{r}
+a=(predict(best_model,df_train_test)-df_train_test['shares'])^2
+summary(a)
+```
+Thus, the out-of-sample error is 0.82792.
+
+
+```{r}
+# 'train' argument is the training data. Please opass 'df_train' (the entire training dataset) as input.
+# Please pass 1234 as seed into the function.
+q5_midterm1_predict <- function(test, train, seed){
+  fit<-lm(shares~kw_avg_avg, data=train)
+  shares_pred<-predict(fit, test['kw_avg_avg'])
+  return(shares_pred)
+}
+
+# call the function
+q5_midterm1_predict(df_test,df_train,1234)
+# print(df_test['shares'])
+```
+
+
+
+## Question 6 - Do your models perform well on out-of-sample data? (12 pts.)
+
+Finally, let's get everything ready to be run on a true out of sample data set.  Please include a code block here that includes `q1_midterm1_predict`, `q3_midterm1_predict`, and `q5_midterm1_predict`.  Once the assignments are turned in, I'll use these functions to train your chosen models and create predictions for the out of sample data set.  I'll post the data set on the Canvas site after all midterms are turned in.
+
+For each model, I'll compute a root mean squared prediction error.  Across all models turned in, points will be allocated as follows:
+
+  1. For Q1 and Q3, let $\text{RMSE}_{\text{Min}}$ be the minimum prediction error over the submitted models.  Let $\text{RMSE}_i$ be your predictive error.  Your prediction points will be computed as:
+  
+  $$5 \times \frac{\text{RMSE}_{\text{Min}}}{\text{RMSE}_{i}}$$
+  
+  2. For Q5 it will be:
+  
+  $$2 \times \frac{\text{RMSE}_{\text{Min}}}{\text{RMSE}_{i}}$$
+
+The goal here is to add a low-stakes incentive and fun "competition" to try to optimize your predictive models.  I expect that the performance across groups/students will be quite close, so this won't greatly affect your final grade.
+
+**If your prediction functions do not run, I will give zero points!**  I will make every effort to debug on my end, but make sure that your functions can run from a clean R/Python environment.  If using libraries/packages, please indicate the packages at the top of your code block/build in a package call that does not require `library()`.  Example functions are included below.  Code cleanliness and usability is important, so please treat this task with some rigor!
+
+Example Function with train data frame:
+
+```{r, include=TRUE, eval = FALSE}
+test_proto <- data.table::fread("midterm1_testProto.csv")
+#Train is a data frame and test is a data frame
+q1_midterm1_predict <- function(train, test){
+  #Let's train a KNN-regression model with 25 nearest neighbors
+  train_x <- train
+  train_x$shares <- NULL
+  train_x$url <- NULL
+  train_x <- as.matrix(train_x)
+  train_y <- as.matrix(log(train$shares))
+  test_x <- test
+  test_x$shares <- NULL
+  test_x$url <- NULL
+  test_x <- as.matrix(test_x)
+  knn_mod <- FNN::knn.reg(train = train_x, test = test_x, y = train_y, k = 25)
+  return(knn_mod$pred)
+}
+#It works
+q1_midterm_predict(train = train, test = test_proto)
+```
+
+Example function with train model object:
+
+```{r, include=TRUE, eval = FALSE}
+test_proto <- data.table::fread("midterm1_testProto.csv")
+#Let's run a linear regression model
+train_proc <- train
+train_proc$url <- NULL
+train_proc$LDA_04 <- NULL
+train_proc$is_weekend <- NULL
+train_proc$weekday_is_wednesday <- NULL
+lm_mod <- lm(log(shares) ~ ., data = train_proc)
+#Save the model object
+saveRDS(lm_mod, "q1_midterm_predict.rds")
+#We can read the model object back in
+pred_mod <- readRDS("q1_midterm_predict.rds")
+#You can check that pred_mod is the same as lm_mod!
+#Write a function that takes the model object as train
+q1_midterm1_predict <- function(train, test){
+  #Using the train model object, make predictions
+  return(predict(train,newdata = test))
+}
+#It works
+q1_midterm_predict(train = pred_mod, test = test_proto)
+```
+
+
+
+### q1_midterm1_predict
+
+```{r}
+q1_midterm1_predict <- function(train, test, seed) {
+  set.seed(1234)
+  
+  print("proprocessing the data...")
+  
+  # reshape the train set to fit the model
+  train$shares = log(train$shares)
+  test$shares = log(test$shares)
+  
+  # adding the `viral content category` variable
+  train$data_channel_is_viral = train$data_channel_is_lifestyle
+  for (i in 1:nrow(train)){
+    if (train[i, "data_channel_is_lifestyle"] == 0 &
+        train[i, "data_channel_is_entertainment"] == 0 &
+        train[i, "data_channel_is_bus"] == 0 &
+        train[i, "data_channel_is_socmed"] == 0 &
+        train[i, "data_channel_is_tech"] == 0 &
+        train[i, "data_channel_is_world"] == 0){
+      
+          train[i, "data_channel_is_viral"] = 1
+          
+    } else{
+          train[i, "data_channel_is_viral"] = 0
+        }
+  }
+  train$data_channel_is_viral <- as.integer(train$data_channel_is_viral)
+  
+  test$data_channel_is_viral = test$data_channel_is_lifestyle
+  for (i in 1:nrow(test)){
+    if (test[i, "data_channel_is_lifestyle"] == 0 &
+        test[i, "data_channel_is_entertainment"] == 0 &
+        test[i, "data_channel_is_bus"] == 0 &
+        test[i, "data_channel_is_socmed"] == 0 &
+        test[i, "data_channel_is_tech"] == 0 &
+        test[i, "data_channel_is_world"] == 0){
+      
+          test[i, "data_channel_is_viral"] = 1
+          
+    } else{
+          test[i, "data_channel_is_viral"] = 0
+        }
+  }
+  test$data_channel_is_viral <- as.integer(test$data_channel_is_viral)
+    
+    # dropping variables
+  train <- subset(train, select = -c(is_weekend, LDA_04, url))
+  test <- subset(test, select = -c(is_weekend, LDA_04, url))
+  
+  # model training - Random Forest
+  library(ranger)
+  set.seed(1234)
+  rf_fit <- ranger(shares ~ ., data = train, mtry = floor(sqrt(ncol(train) - 1)), num.trees = 500)
+  
+  pred = predict(rf_fit, test)
+  return(pred$prediction)
+  
+}
+```
+
+Testing the function
+```{r}
+setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+df_train <- read.csv("midterm1_train.csv")
+df_proto.test <- read.csv("midterm1_testProto.csv")
+```
+
+```{r}
+q1_midterm1_predict(df_train, df_proto.test, 1234)
+```
+
+
+### q3_midterm1_predict
+
+```{r}
+q3_midterm1_predict <- function(train, test, seed){
+  # reshape training and test data
+  library(dplyr)
+  library(stringr)
+  set.seed(1234)
+  train$shares = log(train$shares)
+  test$shares = log(test$shares)
+  
+  train <- subset(train, select = -c(is_weekend, LDA_04, url))
+  test <- subset(test, select = -c(is_weekend, LDA_04, url))
+  
+  # load the 5 features that we found to be most useful
+  features <- c("kw_avg_avg", "LDA_02", "data_channel_is_entertainment", "self_reference_avg_sharess", "kw_min_avg")
+  
+  non.fac.features <- features %>% str_subset("data_channel_is_entertainment",negate = T)
+  # construct model
+  library(mgcv)
+  formula <- as.formula(paste0("shares","~ ", 
+                                paste(paste0("s(",non.fac.features,")"),collapse=" + "),
+                                "+data_channel_is_entertainment"))
+  gam.model <- gam(formula, data = train)
+  
+  #compute predictions
+  prediction <- predict(gam.model, newdata = test, type = "response") %>% as.data.frame()
+  return(prediction[,1])
+}
+```
+
+Test the prediction function
+
+```{r, message=F}
+setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+df_train <- read.csv("midterm1_train.csv")
+df_proto.test <- read.csv("midterm1_testProto.csv")
+q3_midterm1_predict(df_train, df_proto.test,1234)
+```
+
+
+
+### q5_midterm1_predict
+
+```{r}
+# 'train' argument is the training data. Please opass 'df_train' (the entire training dataset) as input.
+# Please pass 1234 as seed into the function.
+
+
+q5_midterm1_predict <- function(test, train, seed){
+  # take of log of `share`
+  set.seed(1234)
+  train$shares = log(train$shares)
+  test$shares = log(test$shares)
+
+  # fit the model and predict
+  
+  fit<-lm(shares~kw_avg_avg, data=train)
+  shares_pred<-predict(fit, test['kw_avg_avg'])
+  return(shares_pred)
+}
+```
+
+Test the function.
+```{r}
+setwd('/Users/mikelin/Desktop/QTM 385-6 Statistical Learning')
+df_train <- read.csv("midterm1_train.csv")
+df_test <- read.csv("midterm1_testProto.csv")
+q5_midterm1_predict(df_test,df_train,1234)
+
+```
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
