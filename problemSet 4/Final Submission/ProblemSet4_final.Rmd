@@ -110,7 +110,7 @@ ggplot(df_train, aes(x = S.F.Ratio,
   geom_point() +
   labs( 
        x="student/faculty ratio", 
-       y="outstate tuition", 
+       y="outstate tuition"
        )
 
 ```

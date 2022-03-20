@@ -136,6 +136,61 @@ Along with the probability lookup table, create a corresponding table that encod
 
 What is the general relationship between these predictors and the probability that a cell is cancerous?  Does it appear that we've missed some information by treating this problem in an unordered discrete fashion?
 
+#### Solution
+
+```{r}
+rm(list=ls(all=TRUE))
+setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/problemSet 5")
+cancerTrain <- read.csv("cancerTrain.csv")
+cancerTest <- read.csv("cancerTest.csv")
+```
+
+```{r}
+str(cancerTrain)
+```
+
+
+```{r}
+caner_bayesPrediction <-
+  
+  function(X, Z){
+    size = nrow(cancerTrain)
+    size_0 = nrow(subset(cancerTrain, Malignant == 0))
+    size_1 = nrow(subset(cancerTrain, Malignant == 1))
+    p0 = size_0 / size
+    p1 = size_1 / size
+    
+    numerator = (nrow(subset(cancerTrain, UCellSize == X & SECellSize == Z & Malignant == 1)) / size_1) * p1
+    denominator = numerator + (nrow(subset(cancerTrain, UCellSize == X & SECellSize == Z & Malignant == 0)) / size_0) * p0
+    
+    return(numerator / denominator)
+  }
+
+```
+
+
+```{r}
+# row = `UCellSize`, Column = `SECellSize`
+lookupTable <- data.frame(matrix(ncol = 10, nrow = 10))
+
+for (i in 1:10){
+  for (j in 1:10){
+    lookupTable[i, j] = caner_bayesPrediction(i, j)
+  }
+}
+```
+
+```{r}
+# row = `UCellSize`, Column = `SECellSize`
+lookupTable
+```
+
+
+```{r}
+nrow(subset(cancerTrain, UCellSize == 4 & SECellSize == 1))
+```
+
+
 ### Part 2 (15 points)
 
 Now, build classifiers that treat the two predictors as continuous (and ordered, in turn).  Specifically, use the training data to train 1) a logistic regression classifier and 2) a QDA classifier.  Using these two classifiers, create probability and Bayes' classifier tables for each training method for each possible combination of $x$ and $z$.  
@@ -163,6 +218,132 @@ Let's start with only 2 predictors: Color and OD280.  Start by creating a plot t
 Using the training data, train a multinomial logistic regression classifier, a QDA classifier, and 2 Naive Bayes classifiers - one assuming normal conditional marginals and one using KDEs for the conditional marginals.  For each classifier, produce a plot that shows the Bayes' classifier as a function of Color and OD280 for the **minimum bounding box** implied by the predictors (which is just a fancy way of saying predict the class for many combinations of predictors within the minimum and maximum of each predictor).  How does the **decision boundary** differ between the 4 classifiers?  Which one appears to do the best at capturing the true decision boundary within the data?  Do any of the methods seem to overfit to the training data?
 
 Hint: `Color` ranges from approximately 1 to 13 and `OD280` ranges from approximately 1 to 4.  There are a lot of approaches to creating the decision plots, but I think that doing a grid evaluation is easiest.
+
+#### Solution
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+wineTrain <- read.csv("wineTrain.csv")
+wineTrain2 <- wineTrain
+wineTrain2$Class <- as.factor(wineTrain2$Class)
+```
+
+plot
+```{r}
+y <- wineTrain2[ , "Class"]
+x <- wineTrain2[, c("Color", "OD280")]
+plot(x, col = as.integer(y)+1L, pch = as.integer(y)+1L)
+
+# Add a legend
+legend(x = "topright", legend=c("Class 1", "Class 2", "Class 3"),
+       col=c("red", "blue", "green"), pch = c(1, 2, 3))
+```
+
+**multinomial logistic regression**
+```{r}
+library(nnet)
+
+multinom_model <- multinom(Class ~ Color + OD280, data = wineTrain2)
+
+summary(multinom_model)
+```
+
+Convert the coefficients to odds by taking the exponential of the coefficients.
+```{r}
+exp(coef(multinom_model))
+
+head(round(fitted(multinom_model), 2))
+```
+
+**QDA**
+```{r}
+library(MASS)
+
+qda_fit <- qda(Class ~ Color + OD280, data = wineTrain)
+
+qda_fit
+```
+
+**Naive Bayes**
+```{r}
+library(naivebayes)
+nb_x <- data.frame("Color" = wineTrain$Color,"OD280" = wineTrain$OD280)
+nb_y <- as.character(wineTrain$Class)
+
+# normal conditional marginals
+nb_mod_gauss <- naivebayes::naive_bayes(x = nb_x, y = nb_y, usekernel = FALSE)
+
+# KDE
+nb_mod_KDE <- naivebayes::naive_bayes(x = nb_x, y = nb_y, usekernel = TRUE)
+
+```
+
+
+#### Plotting
+```{r}
+# input: 
+# model: classification model
+# data: training set
+# class: response variable
+
+boundary <- function(model, class = NULL, predict_type = "class",
+  resolution = 100, showgrid = TRUE, ...) {
+
+  cl <- wineTrain2[ , "Class"]
+  data <- wineTrain2[, c("Color", "OD280")]
+  k <- length(unique(cl))
+  plot(data, col = as.integer(cl)+1L, pch = as.integer(cl)+1L, ...)
+  # Add a legend
+  legend(x = "topright", legend=c("Class 1", "Class 2", "Class 3"),
+        col=c("red", "blue", "green"), pch = c(1, 2, 3), xpd = TRUE)
+  
+  # make grid
+    r <- sapply(data, range, na.rm = TRUE)
+    xs <- seq(r[1,1], r[2,1], length.out = resolution)
+    ys <- seq(r[1,2], r[2,2], length.out = resolution)
+    g <- cbind(rep(xs, each=resolution), rep(ys, time = resolution))
+    colnames(g) <- colnames(r)
+    g <- as.data.frame(g)
+  
+  p <- predict(model, g, type = predict_type)
+  if(is.list(p)) p <- p$class
+  p <- as.factor(p)
+  
+  if(showgrid) points(g, col = as.integer(p)+1L, pch = ".")
+  
+  z <- matrix(as.integer(p), nrow = resolution, byrow = TRUE)
+  contour(xs, ys, z, add = TRUE, drawlabels = FALSE,
+  lwd = 2, levels = (1:(k-1))+.5)
+  
+  invisible(z)
+}
+```
+
+
+**Multinomial Logistic**
+```{r}
+boundary(multinom_model, class = "Class", main = "Multinomial Logistic", showgrid = F)
+```
+
+**QDA**
+```{r}
+boundary(qda_fit, class = "Class", main = "QDA", showgrid = F)
+
+```
+
+**NB - Gauss**
+```{r}
+boundary(nb_mod_gauss, class = "Class", main = "NB - Gauss", showgrid = F)
+```
+
+**NB - KDE**
+```{r}
+boundary(nb_mod_KDE, class = "Class", main = "NB - KDE", showgrid = T)
+```
+
 
 ### Part 2 (15 points)
 
