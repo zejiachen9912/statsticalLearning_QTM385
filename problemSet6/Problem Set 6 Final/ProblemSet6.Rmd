@@ -1,12 +1,20 @@
+
 ---
-title: "Problem Set #6"
-author: "Zejia Chen, Francis Lin, Mike Lin"
-date: '`r format(Sys.Date(), "%B %d, %Y")`'
+title: 'Problem Set #6'
+author: "Zejia Chen, Francis Lin, Xuanyang Lin"
+date: "March 17th, 2022"
 output:
+  pdf_document:
+    toc: no
+    toc_depth: '2'
+  html_document:
+    df_print: paged
+    toc: no
+    toc_depth: '2'
   prettydoc::html_pretty:
     df_print: kable
-    theme: material
     highlight: github
+    theme: leonids
     toc: no
     toc_depth: 2
     toc_float:
@@ -39,7 +47,7 @@ The support vector classifier generalizes the optimal separating hyperplane by a
 `simSVMTrain.csv` contains 729 instances of two predictors and a binary class label.  In this simulated example, the classes are **linearly separable**.  However, they are generated from two separate data generating processes.  As shown in the below figure, the first DGP generates data that is separable with a large margin.  The second DGP generates data that is still linearly separable, but with less of a margin than the first.  This kind of conditional separating behavior is "exaggerated" in this data set, but it does occur quite frequently in real data sets when there is an important omitted predictor that conditions how classes are separated.
 
 ```{r, include=TRUE, eval = TRUE}
-setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/problemSet6")
+#setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/problemSet6")
 train <- read.csv("simSVMTrain.csv")
 par(mfrow = c(1,2))
 plot(train$X1,train$X2, col = train$class + 3, type = "n", xlab = "X1", ylab = "X2")
@@ -165,49 +173,38 @@ Proportion of observations misclassified in the *training set*
 
 ```{r}
 svm_train_10000 <- svm(as.factor(class) ~ X1 + X2, data = train, kernel = "linear", cost = 10000, scale = FALSE)
-
 trainX <- train[,c("X1", "X2")]
 svm_train_10000.pred <- predict(svm_train_10000, trainX)
-
 paste("Misclassificaiton rate: ", mean(svm_train_10000.pred!=train$class))
 ```
 
 10-fold cross validation measure of the expected proportion of observations misclassified in the *test set*
 
 ```{r}
-
 misclass_cv_err <- c()
 #Randomly shuffle the data
 set.seed(123)
 df <- cbind(train$class, as.matrix(cbind(train$X1,train$X2)))
 rand_df<-data.frame(df[sample(nrow(df)),])
 names(rand_df) <- c("class", "X1", "X2")
-
 #Create n folds equally size folds
 n_folds <- cut(seq(1,nrow(rand_df)),breaks=10,labels=FALSE)
-
 # perform the k-fold cross validation
 for (i in 1:10){
   #Segment the data by fold using the which() function 
   index <- which(n_folds == i, arr.ind = T)
   test_data <- rand_df[index,]
   train_data <- rand_df[-index,]
-
   y_name = names(rand_df)[1]
   x_name = names(rand_df)[-1]
-
   test_x <- as.matrix(test_data[, x_name])
   test_y <- as.matrix(test_data[, y_name])
-
   # construct the model and predict the outcome
   svm_test_10000_cv <- svm(as.factor(class) ~ X1 + X2, data = train_data, kernel = "linear", cost = 10000, scale = FALSE)
   pred_cv = predict(svm_test_10000_cv, newdata=test_x)
-
   # get the misclassfied error
   misclass_cv_err[i] <- mean(pred_cv!=test_y)
-
 }
-
 paste("Misclassified rate w/ 10 fold on training data: ", round(mean(misclass_cv_err), 5))
 ```
 
@@ -216,7 +213,6 @@ The actual proportion of obs misclassified using train SVC to create prediciton 
 ```{r}
 testX <- test[,c("X1", "X2")]
 svm_train_10000.predTest <- predict(svm_train_10000, testX)
-
 paste("Misclassified rate: ", mean(svm_train_10000.predTest!=test$class))
 ```
 
@@ -233,7 +229,6 @@ cost <- exp(seq(-10,10,length = 250))
 train_error <- c()
 cv_error <- c()
 misclass_err <- c()
-
 # training error
 for (i in seq(1,250)){
   
@@ -271,7 +266,6 @@ for (i in seq(1,250)){
     cv_error[i] <- mean(pred_cv!=test_y)
   }
 }
-
 # actual misclassification rate
 for (i in seq(1, 250)){
   
@@ -286,13 +280,9 @@ for (i in seq(1, 250)){
 
 ```{r}
 library(ggplot2)
-
 error_df <- data.frame("cost" = cost, "train_error" = train_error, "train_error_cv" = cv_error, "actual_error" = misclass_err)
-
-
 colors <- c("train_error" = "red", "cv_error" = "blue", 
             "actual_error" = "green")
-
 gg <- ggplot(error_df, aes(x = cost)) + 
   geom_line(aes(y = train_error, color = "train_error"), size = 0.9) +
   geom_line(aes(y = train_error_cv, color = "cv_error"), size = 0.9) +
@@ -304,9 +294,7 @@ gg <- ggplot(error_df, aes(x = cost)) +
        color = "Legend"
        ) +
   scale_color_manual(values = colors)
-
 plot(gg)
-
 gg_zoom <- ggplot(error_df, aes(x = cost)) + 
   geom_line(aes(y = train_error, color = "train_error"), size = 0.9) +
   geom_line(aes(y = train_error_cv, color = "cv_error"), size = 0.9) +
@@ -318,7 +306,6 @@ gg_zoom <- ggplot(error_df, aes(x = cost)) +
        color = "Legend"
        ) +
   scale_color_manual(values = colors) + coord_cartesian(xlim=c(0.01,0.8), ylim=c(0, 0.05))
-
 plot(gg_zoom)
 ```
 ```{r}
@@ -332,7 +319,6 @@ points(train$X1[train$class == 1], train$X2[train$class == 1], pch = "+", col = 
 abline(-cf1[1]/cf1[3], -cf1[2]/cf1[3], col = "green")
 abline(-(cf1[1] + 1)/cf1[3], -cf1[2]/cf1[3], col = "black")
 abline(-(cf1[1] - 1)/cf1[3], -cf1[2]/cf1[3], col = "black")
-
 plot(test$X1, test$X2, col = test$class + 3, type = "n", xlab = "X1", 
      ylab = "X2", main = "c = 0.59 (test)")
 points(test$X1[train$class == -1], test$X2[train$class ==-1], pch = "+", col = "blue")
@@ -387,3 +373,321 @@ Some notes:
   3) If using built in K-fold approaches, make sure that the measure being used to choose a model is the misclassification rate.  In `glmnet`, `type.measure` allows you to change the measure that is estimated via cross validation.
   
   4) For support vector methods, always tune `cost` using cross validation.  For polynomial kernels, there is an additional parameter - `degree`.  This is similar to the degree of a spline.  Realistically, we only care about positive integers for this value (though we could consider other values).  For the radial kernel, the `gamma` parameter controls the spread of the resulting Gaussian kernelization.  This value need only be greater than zero, so try a range of values and zoom in on one that minimizes the CV error.
+
+### Solution
+
+```{r}
+df_test=read.csv("carsTest.csv")
+df_train=read.csv("carsTrain.csv")
+df_train$mpg <- factor(df_train$mpg)
+df_test$mpg <- factor(df_test$mpg)
+```
+
+Create a table to summarize results.
+```{r}
+#create matrix with 4 columns
+tab <- matrix(rep(0, times=21), ncol=3, byrow=TRUE)
+#define column names and row names of matrix
+colnames(tab) <- c('training misclassification', 'cross-validation', 'testing misclassification')
+rownames(tab) <- c('SVC linear','SVM radial','SVM polynomial','logistic regression','QDA','logistic GAM','logistic LASSO')
+#convert matrix to table 
+tab <- as.table(tab)
+```
+
+Convert probabilities to classes.
+```{r}
+prob_to_class<-function(pred){
+
+pred_class=c()
+for (e in pred){
+  if (e<0.5){
+    pred_class=c(pred_class,0)
+  } else {
+    pred_class=c(pred_class,1)
+  }
+}
+return(pred_class)
+}
+```
+
+support vector classifier with linear separator
+```{r}
+library(e1071)
+tune_svm1<-e1071::tune(method=svm, mpg~., data=df_train,
+                       kernel="linear",ranges=list(cost=10^(seq(-2.5,-1.5,length = 50))))
+# summary(tune_svm1)
+plot(tune_svm1)
+```
+
+Compute estimates for SVC linear.
+```{r}
+# CV estimate of misclassification
+print("cross validation")
+# summary(tune_svm1)
+plot(tune_svm1)
+best_svm1=tune_svm1$best.model
+tune_svm1$best.performance
+tab[1,2]=tune_svm1$best.performance
+
+# training misclassification rate
+print("training misclassification rate")
+pred=predict(best_svm1, df_train,type='response')
+# pred_class<-prob_to_class(pred)
+sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+tab[1,1]=sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+
+# testing misclassification rate
+print("testing misclassification rate")
+pred=predict(best_svm1, df_test,type='response')
+# pred_class<-prob_to_class(pred)
+sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+tab[1,3]=sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+```
+
+
+
+support vector machine with radial kernel
+```{r}
+tune_svm2<-e1071::tune(svm, mpg~., data=df_train, kernel="radial",probability = TRUE, ranges = list(cost = 10^(seq(-3,3,length = 7)), gamma = 10^(seq(-3,3,length = 7))))
+
+# CV estimate of misclassification
+print("cross validation")
+# summary(tune_svm2)
+best_svm2=tune_svm2$best.model
+tune_svm2$best.performance
+plot(tune_svm2)
+tab[2,2]=tune_svm2$best.performance
+
+# training misclassification rate
+print("training misclassification rate")
+pred=predict(best_svm2, df_train,type='response')
+# pred_class<-prob_to_class(pred)
+sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+tab[2,1]=sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+
+# testing misclassification rate
+print("testing misclassification rate")
+pred=predict(best_svm2, df_test,type='response')
+# pred_class<-prob_to_class(pred)
+sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+tab[2,3]=sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+```
+
+support vector machine with polynomial kernel
+```{r}
+library(e1071)
+df_train$mpg <- factor(df_train$mpg)
+tune_svm3<-e1071::tune(method=svm, mpg~., data=df_train, kernel="polynomial",probability = TRUE, ranges = list(cost = 10^(seq(-3,3,length = 7)), gamma = 10^(seq(-3,3,length = 7))))
+summary(tune_svm3)
+plot(tune_svm3)
+best_svm3=tune_svm3$best.model
+tune_svm3$best.performance
+```
+
+```{r}
+# CV estimate of misclassification
+print("cross validation")
+tune_svm3$best.performance
+tab[3,2]=tune_svm3$best.performance
+
+# training misclassification rate
+print("training misclassification rate")
+pred=predict(best_svm3, df_train,type='response')
+# pred_class<-prob_to_class(pred)
+sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+tab[3,1]=sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+```
+
+```{r}
+# testing misclassification rate
+print("testing misclassification rate")
+pred=predict(best_svm3, df_test,type='response')
+# pred_class<-prob_to_class(pred)
+sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+tab[3,3]=sum(abs(as.numeric(as.character(pred))-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+```
+
+
+logistic regression
+```{r}
+library(boot)
+logistic_fit1=glm(mpg~.,data=df_train,family=binomial())
+cv.glm(df_train, logistic_fit1,K=10)$delta
+```
+
+```{r}
+# training misclassification rate
+print("training misclassification rate")
+pred=predict(logistic_fit1,df_train,type="response")
+pred_class=prob_to_class(pred)
+sum(abs(pred_class-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+tab[4,1]=sum(abs(pred_class-as.numeric(as.character(df_train$mpg))))/nrow(df_train)
+
+# 10-fold CV 
+print("cross validation")
+misclassification=0
+for (i in 1:10){
+  a=(i-1)*30+1
+  b=i*30
+  train_data=df_train[-(a:b), ]
+  test_data=df_train[a:b, ]
+  logistic_fit=glm(mpg~.,data=train_data,family=binomial())
+  pred=predict(logistic_fit, test_data, type="response")
+  # number of misclassified
+  pred_class=prob_to_class(pred)
+  misclassification=misclassification+sum(abs(as.numeric(as.character(test_data$mpg))-pred_class))
+}
+misclassification_rate=misclassification/nrow(df_train)
+misclassification_rate
+tab[4,2]=misclassification_rate
+
+# misclassification on testing dataset
+logistic_fit=glm(mpg~.,data=df_train,family=binomial())
+print("misclassification on testing dataset")
+pred=predict(logistic_fit,df_test,type="response")
+pred_class=prob_to_class(pred)
+sum(abs(pred_class-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+tab[4,3]=sum(abs(pred_class-as.numeric(as.character(df_test$mpg))))/nrow(df_test)
+```
+
+QDA classifier
+```{r}
+df_test=read.csv("carsTest.csv")
+df_train=read.csv("carsTrain.csv")
+library(MASS)
+# qda.fit<-qda(mpg~.,data=df_train)
+
+# training misclassification rate
+qda_fit=qda(mpg~.,data=df_train)
+print("training misclassification rate")
+pred=predict(qda_fit,df_train,type="response")
+sum(abs(as.numeric(as.character(pred$class))-df_train$mpg))/nrow(df_train)
+tab[5,1]=sum(abs(as.numeric(as.character(pred$class))-df_train$mpg))/nrow(df_train)
+
+# cross validation
+print("CV estimate of misclassification rate")
+misclassification=0
+for (i in 1:10){
+  a=(i-1)*30+1
+  b=i*30
+  train_data=df_train[-(a:b), ]
+  test_data=df_train[a:b, ]
+  cv_qda<-qda(mpg~.,data=train_data)
+  pred=predict(cv_qda, test_data, type="response")
+  # number of misclassified
+  misclassification=misclassification+sum(abs(test_data$mpg-as.numeric(as.character(pred$class))))
+}
+misclassification_rate=misclassification/nrow(df_train)
+misclassification_rate
+tab[5,2]=misclassification_rate
+
+# misclassification on testing dataset
+qda_fit=qda(mpg~.,data=df_train)
+print("testing misclassification rate")
+pred=predict(qda_fit,df_test,type="response")
+sum(abs(as.numeric(as.character(pred$class))-df_test$mpg))/nrow(df_test)
+tab[5,3]=sum(abs(as.numeric(as.character(pred$class))-df_test$mpg))/nrow(df_test)
+```
+
+logistic GAM
+```{r}
+library(gam)
+gam_fit=gam(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european,data=df_train,family = binomial())
+
+# training misclassification rate
+print("training misclassification rate")
+pred=predict(gam_fit,df_train,type="response")
+pred_class=prob_to_class(pred)
+sum(abs(pred_class-df_train$mpg))/nrow(df_train)
+tab[6,1]=sum(abs(pred_class-df_train$mpg))/nrow(df_train)
+
+# 10-fold CV 
+print("10-fold CV")
+misclassification=0
+for (i in 1:10){
+  a=(i-1)*30+1
+  b=i*30
+  train_data=df_train[-(a:b), ]
+  test_data=df_train[a:b, ]
+  gam_fit=gam(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european,data=df_train,family = binomial())
+  pred=predict(gam_fit, test_data, type="response")
+  # number of misclassified
+  pred_class=prob_to_class(pred)
+  misclassification=misclassification+sum(abs(test_data$mpg-as.numeric(as.character(pred_class))))
+}
+misclassification_rate=misclassification/nrow(df_train)
+misclassification_rate
+tab[6,2]=misclassification_rate
+
+# misclassification on testing dataset
+gam_fit=gam(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european,data=df_train,family = binomial())
+print("misclassification on testing dataset")
+pred=predict(gam_fit,df_test,type="response")
+pred_class=prob_to_class(pred)
+sum(abs(pred_class-df_test$mpg))/nrow(df_test)
+tab[6,3]=sum(abs(pred_class-df_test$mpg))/nrow(df_test)
+```
+
+logistic LASSO
+```{r}
+library(tidyverse)
+library(glmnet)
+x<-model.matrix(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european, df_train)
+y<-df_train$mpg
+# select optimal lambda
+cv.lasso=cv.glmnet(x,y,alpha=1,family="binomial",type.measure="class")
+plot(cv.lasso)
+lasso_fit <- glmnet(x, y, alpha = 1, family = "binomial",
+                lambda = cv.lasso$lambda.min,type.measure="class")
+```
+
+```{r}
+# training misclassification rate
+print("training misclassification rate")
+pred=lasso_fit %>% predict(newx=x,type="response")
+pred_class=prob_to_class(pred)
+sum(abs(pred_class-df_train$mpg))/nrow(df_train)
+tab[7,1]=sum(abs(pred_class-df_train$mpg))/nrow(df_train)
+
+# 10-fold CV 
+print("10-fold CV")
+misclassification=0
+for (i in 1:10){
+  a=(i-1)*30+1
+  b=i*30
+  train_data=df_train[-(a:b), ]
+  test_data=df_train[a:b, ]
+  x_1<-model.matrix(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european, train_data)
+  y_1<-train_data$mpg
+  x_2<-model.matrix(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european, test_data)
+  y_2<-test_data$mpg
+  lasso_fit=glmnet(x_1,y_1,alpha=1,family="binomial",lambda = cv.lasso$lambda.min)
+  pred=lasso_fit %>% predict(newx=x_2,type="response")
+  # number of misclassified
+  pred_class=prob_to_class(pred)
+  misclassification=misclassification+sum(abs(test_data$mpg-as.numeric(as.character(pred_class))))
+}
+misclassification_rate=misclassification/nrow(df_train)
+misclassification_rate
+tab[7,2]=misclassification_rate
+
+# misclassification on testing dataset
+x<-model.matrix(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european, df_train)[,-1]
+y<-df_train$mpg
+x_test<-model.matrix(mpg~cylinders+displacement+horsepower+weight+acceleration+year+american+european, df_test)[,-1]
+y_test<-ifelse(df_test$mpg==1,1,0)    # df_test$mpg
+print("misclassification on testing dataset")
+lasso_fit <- glmnet(x, y, alpha = 1, family = "binomial",lambda = cv.lasso$lambda.min)
+pred <- lasso_fit %>% predict(newx=x_test,type="response")
+pred_class=prob_to_class(pred)
+sum(abs(pred_class-df_test$mpg))/nrow(df_test)
+tab[7,3]=sum(abs(pred_class-df_test$mpg))/nrow(df_test)
+```
+
+```{r}
+tab
+```
+
+Looking at CV estimates of out-of-sample misclassication rates, SVC with linear separator is most accurate, while SVM w/ polynomial separator and logistic regression are worst (logistic is a bit better than SVC polynomial). Looking at test set misclassification rate, SVC w/ linear separator and SVM w/ radial separator are the best, while logistic regression and logistic GAM are worst. Based on these prediction error estimates, SVC w/ linear separator is the best and logistic regression is the worst.
+
+The reason may be caused by the distribution of our data. If the distribution of predictors is easily linearly separable (might be some misclassification near boundary)  with a hyperplane (in a high dimension space), a SVC with linear separator would be the best fit for splitting the space into 1 class and 0 class without kernalization. Also, if the relationship between predictors and how likely the car is in class 1 is nonlinear, and there are some complicated interactions among predictors, then a logistic regression with only linear terms is hard to fit the data well. 
