@@ -171,6 +171,100 @@ Plot up to 4 images in the validation set that are misclassified with respect to
 
 Note: the underlying algorithm for logistic regression proceeds iteratively attempting to minimize the logistic regression loss function.  Because many of the predictors in this problem have variance close to zero, the default number of iterations (typically 25) may not be enough for the algorithm to converge.  You can deal with this issue by setting the maximum number of IRLS iterations to a larger value - 100 should be sufficient.  In R, this can be achieved within your `glm` call by adding an additional control argument - `control = list(maxit = 100)`.
 
+<<<<<<< Updated upstream
+=======
+### Solution
+
+```{r}
+index_0_1 <- append(which(train_y$label == 0), which(train_y$label == 1))
+train_x_0_1 <- train_x[index_0_1,]
+train_y_0_1 <- train_y[index_0_1,]
+train_xy_0_1 <- cbind(train_x_0_1, train_y_0_1)
+train_xy_0_1$label <- as.factor(train_xy_0_1$label)
+
+index_0_1 <- append(which(validate_y$label == 0), which(validate_y$label == 1))
+test_x_0_1 <- validate_x[index_0_1,]
+test_y_0_1 <- validate_y[index_0_1,]
+```
+
+**Logistic Regression**
+
+training error
+```{r}
+log.fit<-glm(label~.,data=train_xy_0_1,family=binomial, control = list(maxit = 100))
+
+## Accuracy
+pred <- predict(log.fit, train_x_0_1, type = "response")
+confmatrix <- table(observed = train_y_0_1$label, predict = pred > 0.5)
+confmatrix
+print(paste("misclassification rate: ", (confmatrix[1,2] + confmatrix[2,1]) / sum(confmatrix)))
+```
+
+10-fold cv
+```{r, warning=FALSE}
+misclass_cv_err <- c()
+#Randomly shuffle the data
+set.seed(123)
+rand_df<-data.frame(train_xy_0_1[sample(nrow(train_xy_0_1)),])
+
+#Create n folds equally size folds
+n_folds <- cut(seq(1,nrow(rand_df)),breaks=10,labels=FALSE)
+# perform the k-fold cross validation
+for (i in 1:10){
+  #Segment the data by fold using the which() function 
+  index <- which(n_folds == i, arr.ind = T)
+  test_data <- rand_df[index,]
+  train_data <- rand_df[-index,]
+  y_name = names(rand_df)[145]
+  x_name = names(rand_df)[-145]
+  test_x <- test_data[, x_name]
+  test_y <- test_data[, y_name]
+  # construct the model and predict the outcome
+  log.fit<-glm(label~.,data=train_data,family=binomial, control = list(maxit = 100))
+  pred_cv = predict(log.fit, newdata=test_x, type = "response")
+  # get the misclassfied error
+  confmatrix <- table(observed = test_y, predict = pred_cv > 0.5)
+  misclass_cv_err[i] <- (confmatrix[1,2] + confmatrix[2,1]) / sum(confmatrix)
+}
+misclass_cv_err
+paste("Misclassified rate w/ 10 fold on training data: ", round(mean(misclass_cv_err), 5))
+```
+
+```{r, warning=FALSE}
+library(caret)
+ctrlspecs <- trainControl(method = 'cv', number = 10, savePredictions = "all", classProbs = F)
+
+set.seed(123)
+model1 <- train(label~., data = train_xy_0_1, method = "glm", family = binomial, trControl = ctrlspecs)
+
+model1
+```
+
+Test Error
+```{r}
+pred <- predict(log.fit, test_x_0_1, type = "response")
+confmatrix <- table(observed = test_y_0_1$label, predict = pred > 0.5)
+
+confmatrix
+print(paste("misclassification rate w/ test set: ", round((confmatrix[1,2] + confmatrix[2,1]) / sum(confmatrix), 7)))
+```
+
+Plots for misclassified number
+```{r}
+validateSet <- cbind(test_y_0_1, pred)
+wrongLabel_index <- which((validateSet$label == 1 & validateSet$pred < 0.5) | (validateSet$label == 0 & validateSet$pred > 0.5))
+
+par(mfrow = c(2,2))
+for (i in 1:4){
+  index = wrongLabel_index[i]
+  plot_digit(test_x_0_1[wrongLabel_index[i],], bw = FALSE, 
+             main = paste("Predict label:", round(validateSet[wrongLabel_index[i], 2], 5),
+                          "; Actual label:", validateSet[wrongLabel_index[i], 1]))
+}
+```
+
+
+>>>>>>> Stashed changes
 ### Part 2 (7 pts.)
 
 Let's try to understand exactly how this classifier is working.  For the training data, compute a logistic regression classifier with the LASSO penalty on the coefficients.  Use K-fold CV to find a value of $\lambda$ that sparsely represents the set of coefficient and viably minimizes the expected misclassification rate for out of sample data.
@@ -226,6 +320,73 @@ Let's start with multinomial logistic regression.  Compute a 10-fold CV measure 
 Using the **posterior probabilities** that each observation in the validation set belongs to each class, find 2 images that are close to each decision boundary: 3/5, 3/8, 5/8, and 3/5/8.  Plot these images and discuss any factors discriminating between these three digits that multinomial logistic regression is missing. Hint: Think about the contextual aspects that tell a human that a digit is a digit.
 
 Note: As with logistic regression, multinomial logistic regression iteratively optimizes the multinomial logistic loss function.  The default of 100 iterations is likely not enough.  You can change this in `nnet::multinom` by adding an argument `maxit = 1000`.
+
+### Solution
+```{r}
+index_3 <- c()
+for (i in c(3, 5, 8)){
+  index_3 <- append(index_3, which(train_y$label == i))
+}
+
+train_x_3 <- train_x[index_3,]
+train_y_3 <- train_y[index_3,]
+train_xy_3 <- cbind(train_x_3, train_y_3)
+train_xy_3$label <- as.factor(train_xy_3$label)
+
+index_3 <- c()
+for (i in c(3, 5, 8)){
+  index_3 <- append(index_3, which(validate_y$label == i))
+}
+
+test_x_3 <- validate_x[index_3,]
+test_y_3 <- validate_y[index_3,]
+```
+
+Multinomial Logistic Regression (10-fold CV)
+```{r, result = "hide"}
+library(nnet)
+misclass_cv_err <- c()
+#Randomly shuffle the data
+set.seed(123)
+rand_df<-data.frame(train_xy_3[sample(nrow(train_xy_3)),])
+
+#Create n folds equally size folds
+n_folds <- cut(seq(1,nrow(rand_df)),breaks=10,labels=FALSE)
+# perform the k-fold cross validation
+for (i in 1:10){
+  #Segment the data by fold using the which() function 
+  index <- which(n_folds == i, arr.ind = T)
+  test_data <- rand_df[index,]
+  train_data <- rand_df[-index,]
+  y_name = names(rand_df)[145]
+  x_name = names(rand_df)[-145]
+  test_x <- test_data[, x_name]
+  test_y <- test_data[, y_name]
+  # construct the model and predict the outcome
+  multi_log.fit <- multinom(label ~ . , data = train_data, maxit = 1000)
+  pred_cv = predict(multi_log.fit, newdata=test_x)
+  # get the misclassfied error
+  confmatrix <- table(pred_cv, test_y)
+  misclass_cv_err[i] <- 1 - sum(diag(confmatrix)) / sum(confmatrix)
+}
+```
+
+```{r}
+misclass_cv_err
+paste("Misclassified rate w/ 10 fold on training data: ", round(mean(misclass_cv_err), 5))
+```
+
+Test Error
+```{r}
+multi_log.fit <- multinom(label ~ . , data = train_xy_3, maxit = 1000)
+pred <- predict(multi_log.fit, test_x_3)
+
+# test accuracy
+confmatrix <- table(pred, test_y_3$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+```
+
 
 ### Part 2 (10 pts.)
 
