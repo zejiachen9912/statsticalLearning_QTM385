@@ -1,20 +1,16 @@
-
 ---
-title: "Midterm Data Exercise #2 - Classification"
-author: "Kevin McAlister"
-date: "March 28th, 2022"
+title: 'Midtern #2'
+author: "Zejia Chen, Francis Lin, Xuanyang Lin"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
 output:
-  pdf_document:
-    toc: no
-    toc_depth: '2'
-  prettydoc::html_pretty:
+  rmdformats::downcute:
     df_print: kable
-    theme: leonids
-    highlight: github
-    toc: no
-    toc_depth: 2
-    toc_float:
-      collapsed: no
+    self_contained: yes
+    thumbnails: yes
+    lightbox: yes
+    gallery: no
+    highlight: tango
+  prettydoc::html_pretty: default
 urlcolor: blue
 ---
 
@@ -23,6 +19,19 @@ library(ggplot2)
 library(data.table)
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
 ```
+
+```{r}
+# loading the data
+setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/DataAnalysis#2")
+rm(list=ls(all=TRUE))
+train_x <- fread("MNISTTrainX.csv")
+train_y <- fread("MNISTTrainY.csv")
+validate_x <- fread("MNISTValidationX.csv")
+validate_y <- fread("MNISTValidationY.csv")
+test_x <- fread("MNISTTestXRand.csv")
+test_y <- fread("MNISTTestYRand.csv")
+```
+
 
 This is the first midterm data analysis exercise for QTM 385 - Introduction to Statistical Learning.  This exercise will use a single data set to ask a few questions related to creating predictive models for a classification.  This data set is larger and messier than those that have been given for the problem set exercises.  It is intended to provide you with a "real-world" scenario you might see if attempting to build a predictive model for a question you care about.  This assignment is worth 15% of your final grade and your final solutions (a .Rmd file, a corresponding rendered document, and 3 .csv files with your predictions) should be submitted by 11:59 PM on April 11th.
 
@@ -75,32 +84,6 @@ Second, to further reduce the number of predictors, I removed full rows and colu
 
 Finally, I added just a little random noise to any paper pixels (pixels with colors values less than 5) to inject a little variance into any mostly paper coumns of pixels.  This will matter very little for classification accuracy but will allow methods that require inversion of a covariance matrix (logistic regression, QDA, etc.) to run without any additional processing needed.  These final two steps have little effect on the images compared to the $14 \times 14$ pixel images.
 
-
-```{r, echo=FALSE, fig.align = 'center', eval = TRUE}
-plot_digit <- function(x, bw = TRUE,...){
-  if(sqrt(length(x)) != round(sqrt(length(x)))){
-    stop(print("Not a square image! Something is wrong here."))
-  }
-  n <- sqrt(length(x))
-  if(bw == TRUE){
-    x <- as.numeric(x > 50)
-  }
-  par(pty = "s")
-  image(matrix(as.matrix(x), nrow = n)[,n:1], col = gray(12:1 / 12), ...)
-}
-train28 <- fread("MNIST28Pix.csv", nrows = 2)
-train14 <- fread("MNIST14Pix.csv", nrows = 2)
-train12 <- fread("MNIST12PixNoised.csv", nrows = 2)
-par(mfrow = c(2,3))
-plot_digit(train28[1,], bw = FALSE, main = "28 by 28")
-plot_digit(train14[1,], bw = FALSE, main = "14 by 14")
-plot_digit(train12[1,], bw = FALSE, main = "12 by 12")
-plot_digit(train28[2,], bw = FALSE, main = "28 by 28")
-plot_digit(train14[2,], bw = FALSE, main = "14 by 14")
-plot_digit(train12[2,], bw = FALSE, main = "12 by 12")
-par(mfrow = c(1,1))
-```
-
 ## Working with the MNIST Data
 
 Using the $12 \times 12$ images, I've created six data sets for you to work with:
@@ -117,7 +100,7 @@ The reason that this organization is so important is that you will frequently wa
 
 Since it is difficult to look at the numbers and know exactly what we're working with, we need a consistent plotting method.  The easiest way to plot the MNIST data is to use the `image()` function in R.  For your convenience, you can use the `plot_digit()` function below:
 
-```{r, echo=TRUE, fig.align = 'center', eval = FALSE}
+```{r, echo=TRUE, fig.align = 'center', eval = TRUE}
 plot_digit <- function(x, bw = FALSE,...){
   if(sqrt(length(x)) != round(sqrt(length(x)))){
     stop(print("Not a square image! Something is wrong here."))
@@ -129,8 +112,6 @@ plot_digit <- function(x, bw = FALSE,...){
   par(pty = "s")
   image(matrix(as.matrix(x), nrow = n)[,n:1], col = gray(12:1 / 12), ...)
 }
-#Example
-plot_digit(x = train_x[1,], bw = FALSE, main = "True Class = 0")
 ```
 
 `plot_digit()` takes two argument: 1. `x` - a vector of squared integer length that is organized in row-column order (like our MNIST data) and 2. `bw` - a logical (TRUE/FALSE) that tells the function to plot the full grayscale **or** approximately round each pixel to either be white (paper) or black (pencil).  `plot_digit` also accepts any arguments that are applicable to the base plot function in R: `main` to add a plot title, `xlab` or `ylab` to add x and y axis labels, etc.  `image` in R is a legacy function from SPlus that has a quirk that it plots columns in reverse order.  Be careful if using `image` to create your own figures!  You can change the color scheme for `image` using different color range methods.  Look online to find instructions for this.  There are other methods of plotting the MNIST data in R and Python that can be easily found via a quick Google search.
@@ -147,15 +128,60 @@ Let's start by working with the training data to gain some comfort working with 
 
 Create a plot that shows 9 random images in the training data.  Label each image with its corresponding label.  Do the images match the labels?
 
+```{r}
+sample_9 <- sample(1:25000, 9)
+
+par(mfrow = c(3,3))
+for (i in sample_9){
+  label = train_y[i, 1]
+  plot_digit(train_x[i,], bw = FALSE, main = paste("label: ", label))
+}
+par(mfrow = c(1,1))
+```
+
+
 ### Part 2 (5 pts.)
 
 For each digit (0 - 9), compute the average within class pixel value for each of the 144 pixels across the training data.  Create a plot that shows the 10 average digits.  Which class seems to show the most within class variation over images?  Which class seems to the least within class variation over images?
+
+```{r}
+meanPixel <- data.frame(matrix(nrow=10,ncol=144))
+
+
+for (i in 0:10){
+  index <- which(train_y$label == i)
+  subsets <- as.matrix(train_x[index,])
+  for (j in 1:144){
+    meanPixel[i + 1,j] = mean(subsets[,j])
+  }
+}
+
+head(meanPixel[,1:10])
+```
+
+```{r}
+par(mfrow = c(3,2))
+for (i in 1:10){
+  plot_digit(meanPixel[i,], bw = FALSE, main = paste("digit:", i - 1))
+}
+par(mfrow = c(1,2))
+```
+
+Judging the graph, **0**, **5**, **2** seems to have less within class variation over the image.It is likely that our model will perform well in predicting these digits.
+
+On the other hand, digits like **1**, **4**, **6**,**8**, **9** display a relatively large within class variation over the image, meaning that it can be hard for the model to classfy these digits.
 
 ### Part 3 (5 pts.)
 
 Using the average images, come up with a measure of similarity or dissimilarity between different digits.  It doesn't need to be particularly elegant. 
 
 Which pairs of digits will be easiest to tell apart?  Which pairs will be most difficult?  Thinking about how people write different digits, does your similarity measure make sense?
+
+### Rules
+
+One measure of that we can leverage to classify different digit can be measure coordinate that appear to be the darkest for a given graph. The reasoning behind is that different digits has different emphasis (where we dedicate most the ink to) on strokes.
+
+Hence, if a large amount of samples all shares similar darkest coordinate, it is highly likely that these samples belong to the same group.
 
 ## Question 2 (15 pts.)
 
@@ -171,8 +197,6 @@ Plot up to 4 images in the validation set that are misclassified with respect to
 
 Note: the underlying algorithm for logistic regression proceeds iteratively attempting to minimize the logistic regression loss function.  Because many of the predictors in this problem have variance close to zero, the default number of iterations (typically 25) may not be enough for the algorithm to converge.  You can deal with this issue by setting the maximum number of IRLS iterations to a larger value - 100 should be sufficient.  In R, this can be achieved within your `glm` call by adding an additional control argument - `control = list(maxit = 100)`.
 
-<<<<<<< Updated upstream
-=======
 ### Solution
 
 ```{r}
@@ -202,6 +226,7 @@ print(paste("misclassification rate: ", (confmatrix[1,2] + confmatrix[2,1]) / su
 
 10-fold cv
 ```{r, warning=FALSE}
+
 misclass_cv_err <- c()
 #Randomly shuffle the data
 set.seed(123)
@@ -264,7 +289,6 @@ for (i in 1:4){
 ```
 
 
->>>>>>> Stashed changes
 ### Part 2 (7 pts.)
 
 Let's try to understand exactly how this classifier is working.  For the training data, compute a logistic regression classifier with the LASSO penalty on the coefficients.  Use K-fold CV to find a value of $\lambda$ that sparsely represents the set of coefficient and viably minimizes the expected misclassification rate for out of sample data.
@@ -274,6 +298,91 @@ Using the coefficients associated with your chosen value of $\lambda$, create a 
 Leveraging this plot, come up with a set of rules related to the location of pencil pixels that a human who had the pixel mappings could evaluate to determine if an image is a zero or one.  The rules don't need to exactly relate to specific pixels.  Rather, they can relate to relative location of the pixels (center vs. noncenter, for example).
 
 This task is, more or less, an example of **computer vision** - trying to use classification methods to make computer view images in the same way as humans.
+
+### Solution
+
+```{r}
+library(glmnet)
+library(tidyverse)
+```
+
+```{r}
+set.seed(123)
+# Dumy code categorical predictor variables
+train_x <- model.matrix(label~., train_xy_0_1)[,-1]
+# Convert the outcome (class) to a numerical variable
+train_y <- as.matrix(train_y_0_1$label)
+cv.lasso <- cv.glmnet(train_x, train_y, alpha = 1, family = "binomial")
+plot(cv.lasso)
+
+print(cv.lasso$lambda.min)
+```
+
+```{r}
+coef_optim_LASSO <- coef(cv.lasso, s= cv.lasso$lambda.min)
+
+coef_df <- as.data.frame(summary(coef_optim_LASSO))
+col_names_df <- rbind(c("Intercept", 0),data.frame(colnames(train_x_0_1)))
+# saving all leftover significant predictors
+coef_shrink <- col_names_df[c(coef_df$i),1]
+coef_df <- cbind(coef_shrink, coef_df)
+coef_df <- coef_df[,-c(2,3)]
+colnames(coef_df)[1] <- "predictors"
+colnames(coef_df)[2] <- "coef"
+coef_df$coef <- round(coef_df$coef, 7)
+```
+
+Positive Coefficient
+```{r}
+coef_df %>% arrange(desc(coef)) %>% top_n(10)
+```
+
+Negative Coefficient
+```{r}
+coef_df %>% arrange(coef) %>% top_n(-10)
+```
+
+```{r}
+row <- seq(1, 12)
+col <- seq(1, 12)
+grid_df <- expand.grid(Col = col, Row = row)
+grid_df[, 'coef'] <- 0
+
+index <- as.data.frame(summary(coef_optim_LASSO))[, c('i', 'x')]
+index <- index[-1,]
+
+for (i in index$i){
+  grid_df[i, 3] = index[which(index$i == i), 2]
+}
+
+grid_df$coef_sign <- factor(grid_df$coef, levels = c("positive", "0", "negative"))
+grid_df$coef_sign[grid_df$coef > 0]<-"positive"
+grid_df$coef_sign[grid_df$coef == 0]<-"0"
+grid_df$coef_sign[grid_df$coef < 0]<-"negative"
+```
+
+```{r}
+seq <- seq(1, 20)
+library(ggplot2)
+gg <- ggplot(grid_df, aes(x=Row, y=Col)) + 
+  geom_point(aes(col = coef_sign, size = coef)) + 
+  labs( 
+       y="Col", 
+       x="Row", 
+       title="Relationship between the pixels and the coefficients") + 
+  scale_x_continuous("Row", labels = as.character(seq), breaks = seq) +
+  scale_y_continuous("Col", labels = as.character(seq), breaks = seq)
+
+
+plot(gg)
+```
+
+Judging the graph above, it is quite intuitive to understand how penalized logistic regression works in this scenarios.
+
+How negative coefficients appear on the graph follows a seemingly circular pattern, which is exactly how **0** looks through human's eye. Hence, if pencil pixels follow a circular pattern at the center of a given image, we can probably say that the image is a $0$ 
+
+On the other hand, positive coefficients often appears at the corner of the relationship graph. This phenomenon also make tons of sense since a lot of $1$s in the data set are actually drawn tilted rather than up right. Plus, there is unlikely that pencil pixels hit the corners when people are writing $0$, making it even more reasonable for the model to classify in such manner.
+As a result, if pencil pixels appear at the center and corner of the graph, aligning diagonally, we can probably say that is a $1$.
 
 ## Question 3 (25 pts.)
 
@@ -323,6 +432,8 @@ Note: As with logistic regression, multinomial logistic regression iteratively o
 
 ### Solution
 ```{r}
+train_x <- fread("MNISTTrainX.csv")
+train_y <- fread("MNISTTrainY.csv")
 index_3 <- c()
 for (i in c(3, 5, 8)){
   index_3 <- append(index_3, which(train_y$label == i))
@@ -343,7 +454,7 @@ test_y_3 <- validate_y[index_3,]
 ```
 
 Multinomial Logistic Regression (10-fold CV)
-```{r, result = "hide"}
+```{r, echo= "false"}
 library(nnet)
 misclass_cv_err <- c()
 #Randomly shuffle the data
@@ -386,7 +497,6 @@ confmatrix <- table(pred, test_y_3$label)
 confmatrix
 print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
 ```
-
 
 ### Part 2 (10 pts.)
 
