@@ -28,14 +28,9 @@ train_x <- fread("MNISTTrainX.csv")
 train_y <- fread("MNISTTrainY.csv")
 validate_x <- fread("MNISTValidationX.csv")
 validate_y <- fread("MNISTValidationY.csv")
-test_x <- fread("MNISTTestXRand.csv")
-test_y <- fread("MNISTTestYRand.csv")
+test_x_rand <- fread("MNISTTestXRand.csv")
+test_y_rand <- fread("MNISTTestYRand.csv")
 ```
-
-
-This is the first midterm data analysis exercise for QTM 385 - Introduction to Statistical Learning.  This exercise will use a single data set to ask a few questions related to creating predictive models for a classification.  This data set is larger and messier than those that have been given for the problem set exercises.  It is intended to provide you with a "real-world" scenario you might see if attempting to build a predictive model for a question you care about.  This assignment is worth 15% of your final grade and your final solutions (a .Rmd file, a corresponding rendered document, and 3 .csv files with your predictions) should be submitted by 11:59 PM on April 11th.
-
-Unlike the problem sets, there is less guidance as to what methods to use and how to interpret results.  The idea is that you can treat this like a real analysis exercise - applying different models, seeing what works and doesn't work, presenting the best possible model but being transparent about the downsides of your choice.  For each of the three tasks, you should consider a variety of potential methods and choose a single one as your "best" model.
 
 A review of classification methods that we've covered in this course:
 
@@ -169,7 +164,7 @@ par(mfrow = c(1,2))
 
 Judging the graph, **0**, **5**, **2** seems to have less within class variation over the image.It is likely that our model will perform well in predicting these digits.
 
-On the other hand, digits like **1**, **4**, **6**,**8**, **9** display a relatively large within class variation over the image, meaning that it can be hard for the model to classfy these digits.
+On the other hand, digits like **1**, **4**, **6**,**8**, **9** display a relatively large within class variation over the image, meaning that it can be hard for the model to classify these digits.
 
 ### Part 3 (5 pts.)
 
@@ -179,7 +174,7 @@ Which pairs of digits will be easiest to tell apart?  Which pairs will be most d
 
 ### Rules
 
-One measure of that we can leverage to classify different digit can be measure coordinate that appear to be the darkest for a given graph. The reasoning behind is that different digits has different emphasis (where we dedicate most the ink to) on strokes.
+One measure of that we can leverage to classify different digit can be measure coordinate (location) that appear to be the darkest for a given graph. The reasoning behind is that different digits has different emphasis (where we dedicate most the ink to) on strokes.
 
 Hence, if a large amount of samples all shares similar darkest coordinate, it is highly likely that these samples belong to the same group.
 
@@ -189,7 +184,7 @@ Let's start with one of the digit pairs that is easiest to tell apart: 0s and 1s
 
 ### Part 1 (8 pts.)
 
-For reasons you will soon see, we'll only consider one classification approaches for this problem - logistic regression.  Using your training data, train a logistic regression classifier for the literal 0/1 problem.  Compute a 10-fold CV measure of expected prediction accuracy using the training data.  Similarly, compute the accuracy of your trained logistic regression model on the validation set.  What do you find here?
+For reasons you will soon see, we'll only consider one classification approaches for this problem - logistic regression.  Using your training data, train a logistic regression classifier for the literal 0/1 problem.  Compute a 10-fold CV measure of expected prediction accuracy using the training data. Similarly, compute the accuracy of your trained logistic regression model on the validation set.  What do you find here?
 
 Intuitively, explain this result.  Think carefully about the how logistic regression is approaching this classification problem.
 
@@ -214,7 +209,7 @@ test_y_0_1 <- validate_y[index_0_1,]
 **Logistic Regression**
 
 training error
-```{r}
+```{r warning=FALSE}
 log.fit<-glm(label~.,data=train_xy_0_1,family=binomial, control = list(maxit = 100))
 
 ## Accuracy
@@ -225,7 +220,7 @@ print(paste("misclassification rate: ", (confmatrix[1,2] + confmatrix[2,1]) / su
 ```
 
 10-fold cv
-```{r, warning=FALSE}
+```{r warning=FALSE}
 
 misclass_cv_err <- c()
 #Randomly shuffle the data
@@ -255,7 +250,8 @@ misclass_cv_err
 paste("Misclassified rate w/ 10 fold on training data: ", round(mean(misclass_cv_err), 5))
 ```
 
-```{r, warning=FALSE}
+10-fold cv using CARET build-in function
+```{r warning=FALSE}
 library(caret)
 ctrlspecs <- trainControl(method = 'cv', number = 10, savePredictions = "all", classProbs = F)
 
@@ -274,6 +270,12 @@ confmatrix
 print(paste("misclassification rate w/ test set: ", round((confmatrix[1,2] + confmatrix[2,1]) / sum(confmatrix), 7)))
 ```
 
+As we observe in the output, logistic regression did a great job in classifying digit $1$ and digit $2$.And the prediction loss error is pretty consistent across the board.
+
+One reasoning behind can be the fact that logistic regression works well when the classification decision boundary is linearly separable and the cut is distinct. What logistic regression does is essentially calculating the probability of the digit appears to be $1$ / $0$ given a set of pixel point's locations in a linear combinated manner. Since $1$ & $0$ are pretty distinguishable in a sense that there are not many overlapping spaces when writing these two digits, it is reasonable to see such great performance coming from the model.
+
+Hence, in most of cases, the logistic model is able to classify with confidence, and rarely gets to a point where it needs to make a decision hesitantly ($P=0.5$.) 
+
 Plots for misclassified number
 ```{r}
 validateSet <- cbind(test_y_0_1, pred)
@@ -288,6 +290,9 @@ for (i in 1:4){
 }
 ```
 
+I don't blame the model for these misclassifications. If I was presented with these numbers, it is highly likely that I will be having a hard time classify them.
+
+These digits are written in a irregular manner that it is hard for the model to classify them solely based on the pixel location. All of them are tilted in some ways that make the pencil pixel to appear in locations that is uncommon for classifying the actual label.
 
 ### Part 2 (7 pts.)
 
@@ -315,6 +320,7 @@ train_y <- as.matrix(train_y_0_1$label)
 cv.lasso <- cv.glmnet(train_x, train_y, alpha = 1, family = "binomial")
 plot(cv.lasso)
 
+# lambda.min
 print(cv.lasso$lambda.min)
 ```
 
@@ -342,6 +348,7 @@ Negative Coefficient
 coef_df %>% arrange(coef) %>% top_n(-10)
 ```
 
+Plot
 ```{r}
 row <- seq(1, 12)
 col <- seq(1, 12)
@@ -359,9 +366,7 @@ grid_df$coef_sign <- factor(grid_df$coef, levels = c("positive", "0", "negative"
 grid_df$coef_sign[grid_df$coef > 0]<-"positive"
 grid_df$coef_sign[grid_df$coef == 0]<-"0"
 grid_df$coef_sign[grid_df$coef < 0]<-"negative"
-```
 
-```{r}
 seq <- seq(1, 20)
 library(ggplot2)
 gg <- ggplot(grid_df, aes(x=Row, y=Col)) + 
@@ -383,40 +388,6 @@ How negative coefficients appear on the graph follows a seemingly circular patte
 
 On the other hand, positive coefficients often appears at the corner of the relationship graph. This phenomenon also make tons of sense since a lot of $1$s in the data set are actually drawn tilted rather than up right. Plus, there is unlikely that pencil pixels hit the corners when people are writing $0$, making it even more reasonable for the model to classify in such manner.
 As a result, if pencil pixels appear at the center and corner of the graph, aligning diagonally, we can probably say that is a $1$.
-
-## Question 3 (25 pts.)
-
-Now, let's work with a more difficult pair - 4s and 9s.  Logically, these are going to be more difficult to distinguish!  Start by subsetting your training and validation sets to only include 4s and 9s.  There may be some situations where you need to recode these to zeros and ones!  When making predictions on the test set, be sure to recode the predictions back to 4s and 9s.
-
-### Part 1 (5 pts.)
-
-Start by replicating your analysis for 0s and 1s using logistic regression for 4s and 9s.  Compute a 10-fold CV measure of expected prediction accuracy and find the misclassification rate for your validation set.  How does this compare to the performance of logistic regression for 0s and 1s?  Why do these results differ?
-
-Using the same LASSO approach as above, create a plot that shows which pixels are important for the classification.  How does this image differ from the 0/1 case?
-
-### Part 2 (5 pts.)
-
-Compute QDA and Naive Bayes classifiers for the 4/9 problem.  Compare their performance to your logistic regression.  What's going on here?  Why do we see what we see?  Think carefully about the assumptions under-the-hood for QDA, Naive Bayes, and logistic regression and the structure of the pixel data in the MNIST data set.
-
-### Part 3 (10 pts.)
-
-Using the full suite of classification approaches discussed in class, find a classification approach that **minimizes** the expected misclassification rate of 4s and 9s on a true out of sample data set.
-
-Your answer should discuss the possible approaches to this problem and explain how you made your final choice.  Discuss how you chose any tuning parameter values.
-
-You do not need to run all possible classification methods to get full credit for this question!  There are some methods that we can rule out without ever running them.  When doing this, provide grounded reasoning related to the strengths and weaknesses of different approaches.
-
-For your chosen method, explain **why** it outperforms all other approaches.  Think carefully about strengths and weaknesses.  
-
-Finally, present at least 4 examples of misclassified images.  Could we ever expect a classification algorithm to get those images correct?
-
-### Part 4 (5 pts.)
-
-Use the hidden test set to generate a prediction for each included image.  Your predictions should be stored in a matrix that has the image key as the first column and the integer value of the class in the second column.  Save this matrix as `Q3Predictions.csv` and include it with your final submission.
-
-Points for this question will be given with respect to classification accuracy.  Let $E_i$ be the proportion of observations in the test set (that are actually 4s and 9s) misclassified.  Let $E_{min}$ be the minimum proportion of misclassified observations across the class.  Then, you final point total for this part will be:
-
-$$5 \times \frac{E_{max}}{E_i}$$
 
 ## Question 4 (20 pts.)
 
@@ -454,7 +425,7 @@ test_y_3 <- validate_y[index_3,]
 ```
 
 Multinomial Logistic Regression (10-fold CV)
-```{r, echo= "false"}
+```{r, echo= TRUE, results = 'hide'}
 library(nnet)
 misclass_cv_err <- c()
 #Randomly shuffle the data
@@ -483,24 +454,107 @@ for (i in 1:10){
 ```
 
 ```{r}
+# 10-fold error
 misclass_cv_err
 paste("Misclassified rate w/ 10 fold on training data: ", round(mean(misclass_cv_err), 5))
 ```
 
 Test Error
-```{r}
+```{r echo=TRUE,results = 'hide'}
 multi_log.fit <- multinom(label ~ . , data = train_xy_3, maxit = 1000)
 pred <- predict(multi_log.fit, test_x_3)
+```
 
+```{r}
 # test accuracy
 confmatrix <- table(pred, test_y_3$label)
 confmatrix
 print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
 ```
 
+Close Decision Boundary: $3$ & $5$
+```{r}
+pred_prob <- as.data.frame(predict(multi_log.fit, test_x_3, type = "prob"))
+names(pred_prob) <- c("digit_3", "digit_5", "digit_8")
+
+closeBoundary_3_5 <- which(((pred_prob$digit_3 > 0.48) & (pred_prob$digit_3 < 0.52)) 
+                           & ((pred_prob$digit_5 > 0.48) & (pred_prob$digit_5 < 0.52)))
+
+pred_prob[closeBoundary_3_5,]
+
+par(mfrow = c(2,1))
+for (i in c(1, 3)){
+  index = closeBoundary_3_5[i]
+  plot_digit(test_x_3[index,], bw = FALSE, 
+             main = paste("Predict label:", pred[index],
+                          "; Actual label:", test_y_3[index, 1]))
+}
+
+```
+
+Close Decision Boundary: $3$ & $8$
+```{r}
+closeBoundary_3_8 <- which(((pred_prob$digit_3 > 0.48) & (pred_prob$digit_3 < 0.52)) 
+                           & ((pred_prob$digit_8 > 0.48) & (pred_prob$digit_8 < 0.52)))
+
+pred_prob[closeBoundary_3_8,]
+
+par(mfrow = c(2,1))
+for (i in c(3, 6)){
+  index = closeBoundary_3_8[i]
+  plot_digit(test_x_3[index,], bw = FALSE, 
+             main = paste("Predict label:", pred[index],
+                          "; Actual label:", test_y_3[index, 1]))
+}
+```
+Close Decision Boundary: $3$ & $8$
+```{r}
+closeBoundary_5_8 <- which(((pred_prob$digit_5 > 0.48) & (pred_prob$digit_5 < 0.52)) 
+                           & ((pred_prob$digit_8 > 0.48) & (pred_prob$digit_8 < 0.52)))
+
+pred_prob[closeBoundary_5_8,]
+
+par(mfrow = c(2,1))
+for (i in c(2, 5)){
+  index = closeBoundary_5_8[i]
+  plot_digit(test_x_3[index,], bw = FALSE, 
+             main = paste("Predict label:", pred[index],
+                          "; Actual label:", test_y_3[index, 1]))
+}
+```
+
+Close Decision Boundary: $3$ & $5$ & $8$
+```{r}
+closeBoundary_3_5_8 <- which((pred_prob$digit_3 > 0.27) 
+                           & (pred_prob$digit_5 > 0.27)
+                           & (pred_prob$digit_8 > 0.27))
+
+pred_prob[closeBoundary_3_5_8,]
+
+par(mfrow = c(2,1))
+for (i in c(2, 4)){
+  index = closeBoundary_3_5_8[i]
+  plot_digit(test_x_3[index,], bw = FALSE, 
+             main = paste("Predict label:", pred[index],
+                          "; Actual label:", test_y_3[index, 1]))
+}
+```
+
+One factor that prevent multinomial logistic regression to distinguish some of the number is the classifier's sole focus on leveraging the pixel density of certain location to make classification decision.
+
+In my opinion, what makes logistic regression has such a great classifiers can also leads to some drawbacks. The classifier did great in most of the case where there is a distinct decision boundary that we can draw (clear, well-written digits in our case.)
+
+Plus, regression approach has the tendency to average things. While this is not a problem for digits with small within class variance like $0$, $2$, $3$, it might fail to identify some special cases when things get more complicated (large within class variation, ambiguious classification boundary). 
+
+As decision boundary get more blurry (various strokes, blips of the written digits, alike digits,) that is when the classifier starts to become hesitate in making the decision; there are different classes share the same pencil pixel density for certain locations. 
+
+As human, on the other hands, we can identify whatever digit that is presented to us because we just know it; there are always certain features that associate the given digit regardless how it is written out.
+
+Hence, our model could have do a better job in classification if it can not only draw out the decision boundary base on the location of pixel density, but also establish some connection between features(coordinate in our case) and the class itself.
+
 ### Part 2 (10 pts.)
 
-Using any information gained from Part 1 to your advantage, find a classification approach that **minimizes** the expected misclassification rate of 4s and 9s on a true out of sample data set.
+Using any information gained from Part 1 to your advantage, find a classification approach that **minimizes** the expected misclassification rate of 3s, 5s, and 8s on a true out of sample data set.
 
 Your answer should discuss the possible approaches to this problem and explain how you made your final choice.  Discuss how you chose any tuning parameter values.
 
@@ -510,6 +564,255 @@ For your chosen method, explain **why** it outperforms all other approaches.  Th
 
 Finally, present at least 4 examples of misclassified images.  Could we ever expect a classification algorithm to get those images correct?
 
+### Solution
+
+**Model 1: Multinomial Logistic w/ variable selection - LASSO**
+
+Let's first see if shrinkage/regularization approach work in this scenario.
+
+```{r, eval = FALSE}
+# set.seed(123)
+# train_X <- model.matrix(label~., train_xy_3)[,-1]
+# train_Y <- as.matrix(train_y_3$label)
+# cv.multinom_LASSO <- cv.glmnet(train_X, train_Y, alpha = 1, family = "multinomial")
+# plot(cv.multinom_LASSO)
+# 
+# print(cv.multinom_LASSO$lambda.min)
+```
+Since it takes a long time to run a multinomial logistic regression models with LASSO, I decide to only include the result here rather than taking the time running the code chunk again and again.
+
+`lambda.min` = 0.001180999
+
+![plot, cv.multinom_LASSO](/Users/zejiachen/Downloads/000003.png)
+
+
+```{r, eval = FALSE}
+# coef_optim_multi.LASSO <- coef(cv.multinom_LASSO, s= cv.multinom_LASSO$lambda.min)
+# coef_shrink <- coef_optim_LASSO@i[-1]
+# 
+# rowName_shrink <- c()
+# for (i in 1:length(coef_shrink)){
+#   rowName_shrink <- append(rowName_shrink, names(train_x_3)[coef_shrink[i]])
+# }
+# 
+# train_x_shrink <- train_x_3[, c(2,3,8,  23,  28,  29,  32,  36,  46,  51,  52,  57,  58,  59,
+#               61,  63,  64,  67,  69,  70,  71,  72,  75,  77,
+#               78,  79,  81,  82,  87, 88, 89,  90,  92,  93,  94,  95,
+#               103, 113, 120, 125, 126, 131, 135, 136)]
+# 
+# test_x_shrink <- test_x_3[, c(2,3,8,  23,  28,  29,  32,  36,  46,  51,  52,  57,  58,  59,
+#               61,  63,  64,  67,  69,  70,  71,  72,  75,  77,
+#               78,  79,  81,  82,  87, 88, 89,  90,  92,  93,  94,  95,
+#               103, 113, 120, 125, 126, 131, 135, 136)]
+# 
+# train_xy_shrink <- cbind(test_x_shrink, train_xy_3$label)
+# 
+# multi_shrink_log.fit <- multinom(V2 ~ . , data = train_xy_shrink, maxit = 1000)
+# pred <- predict(multi_shrink_log.fit, test_x_shrink)
+# 
+# # test accuracy
+# confmatrix <- table(pred, test_y_3$label)
+# confmatrix
+# print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+```
+
+*Test Error*
+
+| actual / pred | 3 | 5 | 8 |
+| --- | --- | --- | --- | 
+| 3   | 1133 | 171 | 32
+| 5 | 258 | 194 | 1422
+| 8    | 109 | 1135 | 46
+
+Misclassified rate on validation set:  0.69489
+
+It looks like the shrinkage approach is not suitable for multiclass digit classification. It might be the case where some less relevant features for one class can be the determine factor for other classes.
+
+Hence, in order to gain better accuracy, it is better for us still include all predictors regardless for the rest of the models.
+
+**Model 2: Naive Bayes**
+
+Let try some generative classification methods
+```{r}
+library(naivebayes)
+nb_x <- data.frame(train_x_3)
+nb_y <- as.character(train_y_3$label)
+
+nb_mod_kde <- naivebayes::naive_bayes(x = nb_x, y = nb_y, usekernel = TRUE)
+nb_mod_gauss <- naivebayes::naive_bayes(x = nb_x, y = nb_y, usekernel = FALSE)
+
+pred_kde <- predict(nb_mod_kde, test_x_3)
+pred_gauss <- predict(nb_mod_gauss, test_x_3)
+
+# kde accuracy
+confmatrix <- table(pred_kde, test_y_3$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+
+# gauss accuracy
+confmatrix <- table(pred_gauss, test_y_3$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+```
+
+NB does not seems to perform well in this case. I am guessing that it is because NB is too good in picking out digits with odd pattern/forms and eventually winds up overfitting the training set.
+
+NB works well when features are independet to each other, which is highly unlikely in our case. When classifying digits, features, the location of pencil pixel in our case, are likely to asscociate with each other given a paricular class of digits. NB's failure in constructing a well-rounded relationship between predictor may also explain why the model performs so poorly.
+
+**Model 3: LDA**
+```{r}
+library(MASS)
+lda_mod <- MASS::lda(label ~ ., data = train_xy_3)
+
+pred_lda <- predict(lda_mod, test_x_3)
+
+# LDA accuracy
+confmatrix <- table(pred_lda$class, test_y_3$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+```
+
+Similar to multinomial logistic, LDA also has a great accuracy in classifying digits, just little bit behind multinomial in terms of misclassification rate.
+
+**Model 4: SVC & SVM**
+
+Let's try the infamous Support Vector Classifier / Machine
+
+Because of the limited computing power, we sample 500 to make the computation more easier to conduct for SVM
+```{r}
+library(e1071)
+
+set.seed(385)
+
+train_xy_3_sample <- train_xy_3[sample(which(train_xy_3$label == 3), 500),]
+train_xy_3_sample <- rbind(train_xy_3_sample, train_xy_3[sample(which(train_xy_3$label == 5), 500),])
+train_xy_3_sample <- rbind(train_xy_3_sample, train_xy_3[sample(which(train_xy_3$label == 8), 500),])
+
+train_x_svm <- train_xy_3_sample[,-145]
+train_y_svm <- train_xy_3_sample[,145]
+```
+
+```{r warning=FALSE}
+svm_train_10000 <- svm(label ~ ., data = train_xy_3_sample, kernel = "linear", cost = 100, scale = FALSE)
+svm_train_10000_radial <- svm(label ~ ., data = train_xy_3_sample, kernel = "radial", cost = 100, scale = FALSE)
+
+pred_svm <- predict(svm_train_10000, test_x_3)
+pred_svm_radial <- predict(svm_train_10000_radial, test_x_3)
+
+# SVM_linear accuracy
+confmatrix <- table(pred_svm, test_y_3$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+
+# SVM_radial accuracy
+confmatrix <- table(pred_svm_radial, test_y_3$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+```
+
+The result is actually pretty shocking. The SVC outperforms SVM by an incredible margin. SVM totally failed in putting the digits in the right group.
+
+Judging the above result, it seems like non-linear approach to does not work in this case. My theory is that even though non-linear approaches are good to identifying weitrd trends/distribution, it is too sensitive to those anomaly unfortunately. As result, the classifier winds up taking into those wired factors into accounts and misclassifies a lot of regularized digits. 
+
+Plus, most of the digits are consistent with the shape that it supposes to have (when we are averaging the pixel for each digit, most of the digits are recognizable and distinguishable.) Hence, models that are good at separating linear boundary, like multinomial logistic, LDA, and SVC might be better in this case. 
+
+Let's tune the SVC above to get a better result
+```{r}
+tune_svm1 <- tune(method = svm, label ~ ., data = train_xy_3_sample, 
+                         kernel = "linear", ranges = list(cost = 10^(seq(-2.5,-1.5,length = 50))))
+
+svm_best <- tune_svm1$best.model
+
+pred_svm_best <- predict(svm_best, test_x_3)
+
+# tune SVM accuracy
+confmatrix <- table(pred_svm_best, test_y_3$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+```
+
+Like we anticipated, SVC is great in classifying the three class problem, even outperforming our original winner - multinomial logistic regression.
+
+**Model 5: XGBoost**
+
+Let's use ensemble approach to see it helps with improving the classification accuracy.
+
+```{r}
+library(caTools)
+library(xgboost)
+XGB_train <- cbind(train_x_3, train_y_3)
+XGB_cv <- cbind(test_x_3, test_y_3)
+
+# convert every variable to numeric, even the integer variables
+XGB_train <- as.data.frame(lapply(XGB_train, as.numeric))
+XGB_cv <- as.data.frame(lapply(XGB_cv, as.numeric))
+
+# convert data to xgboost format
+XGB.data.train <- xgb.DMatrix(data = data.matrix(XGB_train[, 1:ncol(XGB_train) - 1]), 
+                              label = XGB_train$label)
+XGB.data.cv <- xgb.DMatrix(data = data.matrix(XGB_cv[, 1:ncol(XGB_cv) - 1]), 
+                           label = XGB_cv$label)
+
+watchlist <- list(train  = XGB.data.train, test = XGB.data.cv)
+
+parameters <- list(
+    # General Parameters
+    booster            = "gbtree",          # default = "gbtree"
+    silent             = 0,                 # default = 0
+    # Booster Parameters
+    eta                = 0.3,               # default = 0.3, range: [0,1]
+    gamma              = 0,                 # default = 0,   range: [0,∞]
+    max_depth          = 6,                 # default = 6,   range: [1,∞]
+    min_child_weight   = 1,                 # default = 1,   range: [0,∞]
+    subsample          = 1,                 # default = 1,   range: (0,1]
+    colsample_bytree   = 1,                 # default = 1,   range: (0,1]
+    colsample_bylevel  = 1,                 # default = 1,   range: (0,1]
+    lambda             = 1,                 # default = 1
+    alpha              = 0,                 # default = 0
+    # Task Parameters
+    objective          = "multi:softmax",   # default = "reg:linear"
+    eval_metric        = "merror",
+    num_class          = 10,
+    seed               = 1234               # reproducability seed
+    )
+    
+xgb.model <- xgb.train(parameters, XGB.data.train, nrounds = 10, watchlist)
+```
+
+```{r}
+XGB_pred <- predict(xgb.model, XGB.data.cv)
+
+
+confmatrix <- table(XGB_pred, XGB_cv$label)
+confmatrix
+print(paste("Misclassified rate on validation set: ", round(1 - sum(diag(confmatrix)) / sum(confmatrix), 5)))
+```
+
+As we laern from the class, ensemble approach typically outperforms most of the single-classification models. XGBoost is an absolutely beast when doing the classification. It outperforms our second candidate SVC by a huge margin. 
+
+XGBoost is essentially a much better version of tree based methods by aggregating a bunch of weak learners together. We do not need to make any assumption necessarily about the data itself, which make it quite flexible to deal with large data set like MNIST. Plus, the boosting makes outliers have minimal impact on the prediction, preventing potential overfitting to occur. It workds well in our case where the dataset is large, contains many features, and is presents with outliers
+
+Nevertheless, XGBoost has some setbacks too: it needs some serious tuning to realize its potential, and it is possible to overfit the data without proper tuning. Here, I just use all default parameter in terms of tunign the model. Although it performs well in the validation, it is still a concern if it does a much better job than other candidate model in the hidden test set.
+
+Let's see some the misclassification by XGBoost
+```{r}
+predicitions <- data.frame(XGB_pred, XGB_cv$label)
+misclass_XGB <- which((predicitions$XGB_cv.label == 3) & (predicitions$XGB_pred != 3))
+misclass_XGB <- append(misclass_XGB,which((predicitions$XGB_cv.label == 5) & (predicitions$XGB_pred != 5)))
+misclass_XGB <- append(misclass_XGB,which((predicitions$XGB_cv.label == 8) & (predicitions$XGB_pred != 8)))
+
+sample_misclass <- sample(misclass_XGB, 6)
+
+par(mfrow = c(2,3))
+for (i in sample_misclass){
+  plot_digit(test_x_3[i,], bw = FALSE, 
+             main = paste("Predict label:", predicitions[i,1],
+                          "; Actual label:", predicitions[i, 2]))
+}
+```
+
+About mistakes. Some digits are so badly written that neither Superpowerful Algorithm nor Human will never recognize them. But for some other digits there are just not enough train set clusters to classify them correctly.
+
 ### Part 3 (5 pts.)
 
 Use the hidden test set to generate a prediction for each included image.  Your predictions should be stored in a matrix that has the image key as the first column and the integer value of the class in the second column.  Save this matrix as `Q4Predictions.csv` and include it with your final submission.
@@ -517,40 +820,27 @@ Use the hidden test set to generate a prediction for each included image.  Your 
 Points for this question will be given with respect to classification accuracy.  Let $E_i$ be the proportion of observations in the test set (that are actually 3s, 5s, and 8s) misclassified.  Let $E_{min}$ be the minimum proportion of misclassified observations across the class.  Then, you final point total for this part will be:
 
 $$5 \times \frac{E_{max}}{E_i}$$
+### Solution
 
-## Question 5 (25 pts.)
+```{r, eval = FALSE}
+XGB_q4_testX <- as.data.frame(lapply(test_x_rand, as.numeric))
 
-Finally, let's work with the full MNIST data set.  This is a 10 class classification problem that has been studied extensively.  With your work on this problem, you will join the club of data scientists who have taken a crack at one of machine learning's most infamous classification tasks!
+# convert data to xgboost format
+XGB.data.q4Test <- xgb.DMatrix(data = data.matrix(XGB_q4_testX[, 1:ncol(XGB_q4_testX)]))
 
-### Part 1 (15 pts.)
+XGB_pred_testQ4 <- predict(xgb.model, XGB.data.q4Test)
+```
 
-Use any tools in our classification arsenal to try to minimize the expected misclassification rate for out of sample handwritten digits.
+```{r, eval = FALSE}
+test_y_rand <- cbind(test_y_rand, XGB_pred_testQ4)
+test_y_rand <- test_y_rand[, c(1, 3)]
 
-In your answer, you should benchmark any algorithms that are suited for the problem.  For any classification methods that you know will not work well (by virtue of the structure of the data), justify why it's not worth the time to check it.  Be sure to explain your method for tuning any hyperparameters.
+head(test_y_rand)
+```
 
-For any models you run, produce a table that shows the misclassification rate on the validation set.  Similarly, record the compute time needed to arrive at your final model (including any hyperparameter tuning) and include this in the same table.  See [this StackOverflow thread](https://stackoverflow.com/questions/6262203/measuring-function-execution-time-in-r) for an elementary way to do this in R.
-
-Which model performs the best on the 10 class problem?  Why do you think this model performs the best?  Compare your approach to other possible approaches when answering this question.   
-
-Is the tradeoff in accuracy vs. compute time worth the gain in realistic scenarios?  Think about how these algorithms might scale as $N$ and $P$ get larger.  Specifically, discuss the problem of hyperparameter tuning and how this might contribute to difficulty in implementing your chosen approach.
-
-For one-off classification problems, the computational time may not matter.  However, there is significant research into the area of **online classification algorithms** - algorithms in which new predictions can be made quickly using existing data and the classification algorithm can be updated using new training data as it arrives.  See [this Wikipedia page](https://en.wikipedia.org/wiki/Online_machine_learning) for more information on this topic.
-
-### Part 2 (5 pts.)
-
-For your final model, compute a **confusion matrix** for the validation set that shows how often each digit is classified in each class.  Which incorrect classifications happen most frequently? 
-
-For the most commonly confused digit pairs, plot examples that are misclassified.  What aspect of these images led to their misclassification?
-
-The MNIST data as presented to you has been simplified in some ways.  There are also other data cleaning tasks that can improve predictive accuracy.  What are some steps that could be taken in the data cleaning stage that would help your chosen method improve its misclassification rate?
-
-### Part 3 (5 pts.)
-
-Use the hidden test set to generate a prediction for each included image.  Your predictions should be stored in a matrix that has the image key as the first column and the integer value of the class in the second column.  Save this matrix as `Q5Predictions.csv` and include it with your final submission.
-
-Points for this question will be given with respect to classification accuracy.  Let $E_i$ be the proportion of observations in the test set misclassified.  Let $E_{min}$ be the minimum proportion of misclassified observations across the class.  Then, you final point total for this part will be:
-
-$$5 \times \frac{E_{max}}{E_i}$$
+```{r, eval = FALSE}
+write.csv(test_y_rand,"/Users/zejiachen/Downloads/Q4Predictions.csv", row.names = FALSE)
+```
 
 
 
