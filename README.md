@@ -21,6 +21,9 @@ Topics include: KNN, K-fold Cross Validation, Evaluation Metrics(LOOCV, GCV, AIC
 
 [View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/ProblemSet%202/final%20submission)
 
+[View Notes](https://immediate-dawn-dda.notion.site/Out-of-Sample-Performance-and-Validation-Sets-3368955ddaac4458a97cbf6a5ebe1aaf)
+
+
 ---
 **Problem Set 3**
 
