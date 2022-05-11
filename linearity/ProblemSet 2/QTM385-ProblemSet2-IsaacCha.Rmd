@@ -1,0 +1,241 @@
+---
+title: "QTM385-ProblemSet2-IsaacCha.Rmd"
+author: "Isaac Cha"
+date: "1/31/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(data.table)
+library(reshape2)
+library(stringr)
+library(FNN)
+#library(ModelMetrics)
+setwd('/Users/minocha/Desktop/Emory/Spring 2022/QTM385/ProblemSets/ProblemSet2')
+getwd()
+rm(list=(ls()))
+```
+
+# Problem 1.
+## Problem 1. Part 1.
+```{r}
+df <- read.csv('TaiwanPricing_Train.csv')
+df1 <- subset(df, select=c("Lat","Long","Price"))
+head(df1)
+```
+```{r}
+df_rs <- melt(df1, id.vars=c("Lat","Long"), measure.vars="Price")
+names(df_rs) <- c("Lat","Long","Price")
+
+df_rs$Lat <- as.numeric(str_sub(df_rs$Lat, str_locate(df_rs$Lat, '=')[1,1] + 1))
+df_rs$Long <- as.numeric(str_sub(df_rs$Long, str_locate(df_rs$Long, '=')[1,1] + 1))
+head(df_rs)
+```
+
+```{r, fig.height=2.7, fig.width=2.7*2.5}
+plot<-ggplot(df1, aes(Lat, Long, color=Price)) +
+  geom_density_2d() +
+  geom_point()
+plot1<-ggplot(df1, aes(Lat, Long, color=Price)) +
+  geom_density_2d() +
+  geom_density_2d_filled(alpha=0.4) +
+  geom_point() +
+  geom_smooth(method = lm)
+plot2<-ggplot(df1, aes(Lat, Long, color=Price)) +
+  geom_density_2d() +
+  geom_density_2d_filled(alpha=0.4) +
+  geom_point() + #color=df$Price
+  geom_smooth()
+
+plot
+plot1
+plot2
+
+#aspect_ratio <- 2.5
+#ggsave(filename = 'plot1.png', plot = plot1, height = 7 , width = 7)
+```
+
+
+
+## Problem 1. Part 2.
+```{r}
+rm(list=(ls()))
+
+train_df <- read.csv('TaiwanPricing_Train.csv')
+test_df1 <- read.csv('TaiwanPricing_Test1.csv')
+test_df2 <- read.csv('TaiwanPricing_Test2.csv')
+
+head(train_df)
+head(test_df1)
+head(test_df2)
+```
+
+```{r}
+x_trn <- as.matrix(cbind(train_df$Lat, train_df$Long))
+y_trn <- as.matrix(train_df$Price)
+
+x_tst1 <- as.matrix(cbind(test_df1$Lat, test_df1$Long))
+y_tst1 <- as.matrix(test_df1$Price)
+x_tst2 <- as.matrix(cbind(test_df2$Lat, test_df2$Long))
+y_tst2 <- as.matrix(test_df2$Price)
+
+#mod <- caret::knnreg(x_trn, y_trn, k=3)
+#pred <- predict(mod, x_tst)
+#mse <- ModelMetrics::mse(pred=pred, actual=y_tst)
+
+knn_mse <- function(k, x_trn, y_trn) {
+  model <- caret::knnreg(x_trn, y_trn, k=k)
+  pred <- predict(model, x_trn)
+  insamp_mse <- ModelMetrics::mse(pred=pred, actual=y_trn)
+  return (insamp_mse)
+}
+
+mse_df <- function(n, x_trn, y_trn) {
+  mse_df <- data.frame(k=1:n, mse=rep(0, n))
+  for (i in 1:n) {
+    mse_df$mse[i] <- knn_mse(i, x_trn, y_trn)
+    }
+  return (mse_df)
+}
+
+plot(mse_df(20, x_trn, y_trn))
+```
+The more number of nearest neighbors to average over, the higher in-sample MSE will be, which implies less complexity and less flexibility. Therefore, the least complex value of k is 20 (in this case).
+
+
+
+## Problem 1. Part 3.
+```{r}
+knn_mse <- function(k, x_trn, y_trn) {
+  model <- caret::knnreg(x_trn, y_trn, k=k)
+  pred <- predict(model, x_trn)
+  insamp_mse <- ModelMetrics::mse(pred=pred, actual=y_trn)
+  return (insamp_mse)
+}
+
+knn_reg_kfold <- function(x, y, k, folds, seed) {
+  kfold <- rep(0,folds)
+  set.seed(seed)
+  fold_idx <- split(sample(nrow(x)),1:folds)
+  for (i in 1:folds) {
+    temp_idx <- fold_idx[-i]
+    
+    new_x <- x[temp_idx[[1]],]
+    new_y <- as.matrix(y[temp_idx[[1]],])
+    if (folds > 2) {
+      for (j in 2:(folds-1)) {
+        new_x <- rbind(new_x, x[temp_idx[[j]],])
+        new_y <- rbind(new_y, as.matrix(y[temp_idx[[j]],]))
+      }
+    } else {
+      new_x <- rbind(new_x, x[temp_idx[[1]],])
+      new_y <- rbind(new_y, as.matrix(y[temp_idx[[1]],]))
+    }
+    kfold[i] <- knn_mse(k, new_x, new_y)
+  }
+  return (mean(kfold))
+}
+
+LOOCV <- function(x, y, k) {
+  N <- nrow(x)
+  loocv <- rep(0,N)
+  loocv_idx <- rep(1:N)
+  for (i in 1:N) {
+    new_x <- x[loocv_idx[-i],]
+    new_y <- y[loocv_idx[-i],]
+    
+    loocv[i] <- knn_mse(k, new_x, new_y)
+  }
+  return (mean(loocv))
+}
+
+knn_kfold_mse <- function(n, x, y, seed) {
+  mse_df <- data.frame(k=1:n, fold_2=rep(0, n), fold_5=rep(0, n), fold_10=rep(0, n), fold_20=rep(0, n), LOOCV=rep(0,n))
+  for (i in 1:n) {
+    mse_df$fold_2[i] <- knn_reg_kfold(x, y, i, 2, seed)
+    mse_df$fold_5[i] <- knn_reg_kfold(x, y, i, 5, seed)
+    mse_df$fold_10[i] <- knn_reg_kfold(x, y, i, 10, seed)
+    mse_df$fold_20[i] <- knn_reg_kfold(x, y, i, 20, seed)
+    mse_df$LOOCV[i] <- LOOCV(x, y, i)
+    }
+  return (mse_df)
+}
+
+knn_kfold_mse_df <- knn_kfold_mse(20, x_trn, y_trn, 123)
+knn_kfold_mse_df
+```
+
+```{r}
+knn_kfold_mse_df <- knn_kfold_mse(20, x_trn, y_trn, 123)
+knn_kfold_mse_df <- melt(knn_kfold_mse_df, id.vars = 'k', variable.name='folds')
+
+ggplot(knn_kfold_mse_df, aes(x=k, value)) +
+  geom_point(aes(color=folds))
+```
+
+
+## Problem 1. Part 4.
+```{r}
+knn_seed_mse <- function(n, x, y) {
+  mse_df <- data.frame(k=1:n, seed_100=rep(0, n), seed_200=rep(0, n), seed_300=rep(0, n), seed_400=rep(0, n), seed_500=rep(0,n))
+  for (i in 1:n) {
+    mse_df$seed_100[i] <- knn_reg_kfold(x, y, i, 10, 100)
+    mse_df$seed_200[i] <- knn_reg_kfold(x, y, i, 10, 200)
+    mse_df$seed_300[i] <- knn_reg_kfold(x, y, i, 10, 300)
+    mse_df$seed_400[i] <- knn_reg_kfold(x, y, i, 10, 400)
+    mse_df$seed_500[i] <- knn_reg_kfold(x, y, i, 10, 500)
+    }
+  return (mse_df)
+}
+
+knn_seed_mse_df <- knn_seed_mse(20, x_trn, y_trn)
+knn_seed_mse_df
+
+knn_seed_mse_df <- melt(knn_seed_mse_df, id.vars = 'k', variable.name='folds')
+ggplot(knn_seed_mse_df, aes(x=k, value)) +
+  geom_point(aes(color=folds))
+```
+## Problem 1. Part 5.
+```{r}
+grid_Lat <- seq(min(x_trn[,1]), max(x_trn[,1]), length = 150)
+grid_Long <- seq(min(x_trn[,2]), max(x_trn[,2]), length = 150)
+
+grid_data<-tidyr::expand_grid(Lat = grid_Lat, Long = grid_Long)
+grid_data <- as.matrix(cbind(grid_data$Lat, grid_data$Long))
+
+knn_grid_pred <- function(k, grid_data) {
+  model <- caret::knnreg(x_trn, y_trn, k=k)
+  pred <- predict(model, grid_data)
+  
+  grid_data <- cbind(grid_data, pred)
+  grid_df <- as.data.frame(grid_data)
+  colnames(grid_df) <- c("Lat","Long","Predicted_Price")
+  title <- stringr::str_glue('{k} Nearest Neighbors')
+  
+  grid_plot <- ggplot(grid_df, aes(Lat,Long, color=Predicted_Price)) +
+    geom_point() +
+    ggtitle(title) +
+    xlab('Latitude') + ylab('Longitude') + labs(color = 'Predicted Price')
+  return (grid_plot)
+}
+
+knn_grid_pred(3, grid_data)
+knn_grid_pred(1, grid_data)
+knn_grid_pred(20, grid_data)
+```
+
+
+
+
+## Problem 2. Part 1.
+```{r}
+ggplot(train_df, aes(Age, Price)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle('Age vs. Price')
+```
+
+
+

@@ -1,0 +1,608 @@
+---
+title: "Problem Set #3"
+author: "Zejia Chen"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  prettydoc::html_pretty:
+    df_print: kable
+    theme: architect
+    highlight: github
+    toc: no
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+urlcolor: blue
+---
+
+```{r, include=FALSE}
+library(ggplot2)
+library(data.table)
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, fig.width = 16/2, fig.height = 9/2, tidy.opts=list(width.cutoff=60), tidy=TRUE)
+```
+
+This is the third problem set for QTM 385 - Intro to Statistical Learning.  This homework will cover applied exercises related to predictor selection for linear regression models. 
+
+Please use the intro to RMarkdown posted in the Intro module and my .Rmd file as a guide for writing up your answers.  You can use any language you want, but I think that a number of the computational problems are easier in R.  Please post any questions about the content of this problem set or RMarkdown questions to the corresponding discussion board.
+
+Your final deliverable should be two files: 1) a .Rmd/.ipynb file and 2) either a rendered HTML file or a PDF.  Students can complete this assignment in groups of up to 3.  Please identify your collaborators at the top of your document.  All students should turn in a copy of the solutions, but your solutions can be identical to those of your collaborators.
+
+This assignment is due by February 11th, 2022 at 11:59 PM EST.  
+
+***
+
+## Problem 1: Some Cool Ridge and LASSO Identities (30 pts.)
+
+### Part 1 (10 pts.)
+
+Both ridge regression and the LASSO are approaches that add penalty terms to the standard mean squared error loss function that discourage solutions that are too dense - we'd rather have a biased estimate of the regression coefficients that then leads to lower expected prediction error by virtue of reduced between model variance.  Both the ridge and LASSO solutions arise due to almost ad-hoc solutions to the problem of collinearity and/or pursuit of a method for solving the $L_0$ best-subset regression problem.  However, there is an equally useful equivalent justification via Bayesian statistics.
+
+Recall that the likelihood for the general linear regression problem assumes normal idiosyncratic errors:
+
+$$\ell(\boldsymbol{y} \mid \boldsymbol{X} , \boldsymbol{\beta} , \sigma^2) = \prod \limits_{i = 1}^N \frac{1}{\sqrt{2 \pi \sigma^2}} \exp \left[- \frac{1}{2 \sigma^2} (y_i - \boldsymbol{x}_i'\boldsymbol{\beta})^2 \right]$$
+and admits a workable log-likelihood:
+
+$$\ell \ell (\boldsymbol{y} \mid \boldsymbol{X} , \boldsymbol{\beta} , \sigma^2) = -\frac{N}{2} \log 2 \pi \sigma^2 - \frac{1}{2 \sigma^2} \|\boldsymbol y - \boldsymbol{X \beta} \|^2$$
+The Bayesian approach places a **prior** on the unknown parameters and characterizes a **posterior distribution** that combines our prior uncertainty about the value of the unknown parameters with uncertainty due to sampling error (e.g. the prior and the likelihood).
+
+Bayes' theorem tells us that the log posterior distribution on $\boldsymbol \beta$ taking $\sigma^2$ as known is proportional to ($\propto$):
+
+$$\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2) \propto \ell \ell (\boldsymbol{y} \mid \boldsymbol{X} , \boldsymbol{\beta} , \sigma^2) + \log f(\boldsymbol \beta)$$
+
+where $\log f(\boldsymbol \beta)$ is the **log prior**.  Then, the point estimate of $\boldsymbol \beta$ that minimizes the loss is the one that **maximizes** the posterior - the posterior mode.
+
+Suppose we define the prior over $\boldsymbol \beta$ as the product of independent normal distributions with common mean 0 and variance $\tau^2$:
+
+$$ f(\boldsymbol{\beta}) = \prod \limits_{j = 1}^P \mathcal{N}(\beta_j \mid 0 , \tau^2) = \prod \limits_{j = 1}^P \frac{1}{\sqrt{2 \pi \tau^2}} \exp \left[-\frac{1}{2 \tau^2} \beta_j^2 \right]$$
+
+Show that the negative log posterior distribution on $\boldsymbol \beta$ is proportional to the ridge regression loss function:
+
+$$\| \boldsymbol y - \boldsymbol{X\beta} \|^2 + \lambda \sum \limits_{j = 1}^P \beta^2_j$$
+
+and find an expression for the regularization constant, $\lambda$ that is a function of known quantities.
+
+Notes:
+
+  1. $\sigma^2$ is the same error variance we've seen before.  We can think of $\tau^2$ as an information penalty - compared to OLS, I need to see $\frac{1}{\tau^2}$ more evidence to confirm that I am better off **not** setting $\beta_j = 0$.
+  2. $\boldsymbol \beta$ is the random variable here.  Under the Bayesian paradigm, we think of parameters as uncertain.  So, try to construct everything keeping $\boldsymbol \beta$ in mind.
+  3. Every step of the way, you can get rid of terms that don't have anything to do with $\boldsymbol \beta$ - since we're finding an equation that is proportional to the true posterior, we can get rid of products (or sums in log space) that don't rely on the random variable.  The leftovers can all be thrown to the unimportant (for this purpose) **normalizing constant** at the front of proper PDFs that make everything integrate to one.  
+  
+#### Solution
+
+We first take the $log$ of our prior distribution.
+
+$$\log{f(\beta)} = \log{\prod \limits_{j = 1}^P \frac{1}{\sqrt{2 \pi \tau^2}} \exp \left[-\frac{1}{2 \tau^2} \beta_j^2 \right]} \\ =\sum_{i=1}^{P}\log{\frac{1}{\sqrt{2 \pi \tau^2}} \exp \left[-\frac{1}{2 \tau^2} \beta_j^2 \right]}$$
+
+$$= \sum{\log{\frac{1}{\sqrt{2 \pi \tau^2}}}} + \sum{\log{\exp \left[-\frac{1}{2 \tau^2} \beta_j^2 \right]}} \\ = -\frac{P}{2}\log{2\pi\tau^2} - \frac{1}{2\tau^2}\sum{\beta_j^2}$$
+
+To retrieve the corresponding posterior distribution, we know that
+
+$$\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2) \propto \ell \ell (\boldsymbol{y} \mid \boldsymbol{X} , \boldsymbol{\beta} , \sigma^2) + \log f(\boldsymbol \beta)$$
+$$=\Big(-\frac{N}{2} \log 2 \pi \sigma^2 - \frac{1}{2 \sigma^2} \|\boldsymbol y - \boldsymbol{X \beta} \|^2 \Big) + \Big(-\frac{P}{2}\log{2\pi\tau^2} - \frac{1}{2\tau^2}\sum{\beta_j^2} \Big)$$
+since we're finding an equation that is proportional to the true posterior, we can get rid of the terms that are not associted with $\beta$
+
+$$\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2) \propto -\Big(\frac{1}{2 \sigma^2} \|\boldsymbol y - \boldsymbol{X \beta} \|^2 + \frac{1}{2\tau^2}\sum{\beta_j^2} \Big) \\ \propto -\Big(\|\boldsymbol y - \boldsymbol{X \beta} \|^2 + \frac{\sigma^2}{\tau^2}\sum{\beta_j^2}\Big)$$
+
+Finally, we take the negative of $\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2)$ and we have
+
+$$-\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2)  \propto \Big(\|\boldsymbol y - \boldsymbol{X \beta} \|^2 + \frac{\sigma^2}{\tau^2}\sum{\beta_j^2}\Big) \\ \text{where } \lambda = \frac{\sigma^2}{\tau^2}$$
+
+### Part 2 (10 pts.)
+
+There's nothing saying that our prior on each $\beta_j$ needs to be normal.  In fact, we can choose other priors for a variety of different reasons.  Another viable choice of prior on $\beta_j$ is the [Laplace distribution](https://en.wikipedia.org/wiki/Laplace_distribution) with mean 0 and scale parameter $b > 0$:
+
+$$f(\boldsymbol \beta) = \prod \limits_{j = 1}^P \frac{1}{2b} \exp \left[- \frac{|\beta_j|}{b} \right]$$
+The variance of a Laplace distributed random variable is $2b^2$ - so it scales similarly to variance in the normal distribution.
+
+Show that the negative log posterior distribution on $\boldsymbol \beta$ using Laplace priors is proportional to the LASSO loss function:
+
+$$\frac{1}{2}\| \boldsymbol y - \boldsymbol{X\beta} \|^2 + \lambda \sum \limits_{j = 1}^P | \beta_j |$$
+
+and find an expression for the regularization constant, $\lambda$ that is a function of known quantities.
+
+#### Solution
+
+We again take the $log$ of $f(\beta)$
+
+$$\log{f(\beta)} = \log{\prod \limits_{j = 1}^P \frac{1}{2b} \exp \left[-\frac{|\beta_j|}{b} \right]} \\ = \sum_{i=1}^{P}\log{\frac{1}{2b} \exp \left[-\frac{|\beta_j|}{b} \right]}$$
+
+$$= \sum{\log{\frac{1}{2b}}} + \sum{\log{\exp \left[ -\frac{|\beta_j|}{b} \right]}} \\ = -P\log{2b} - \frac{1}{b}\sum{|\beta_j|}$$
+
+To retrieve the corresponding posterior distribution, we know that
+
+$$\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2) \propto \ell \ell (\boldsymbol{y} \mid \boldsymbol{X} , \boldsymbol{\beta} , \sigma^2) + \log f(\boldsymbol \beta)$$
+
+$$ = \Big(-\frac{N}{2} \log 2 \pi \sigma^2 - \frac{1}{2 \sigma^2} \|\boldsymbol y - \boldsymbol{X \beta} \|^2 \Big) + \Big(-P\log{2b} - \frac{1}{b}\sum{|\beta_j|}\Big)$$
+We take the irrelevant terms out,and we get
+
+$$\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2) \propto -\Big(\frac{1}{2 \sigma^2} \|\boldsymbol y - \boldsymbol{X \beta} \|^2 + \frac{1}{b}\sum{|\beta_j|}\Big)\\ \propto -\Big(\frac{1}{2} \|\boldsymbol y - \boldsymbol{X \beta} \|^2 + \frac{\sigma^2}{b}\sum{|\beta_j|}\Big)$$
+
+Finally, we take the reverse the sign of $\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2)$
+
+$$-\log f(\boldsymbol \beta | \boldsymbol X , \boldsymbol y, \sigma^2) \propto \Big(\frac{1}{2} \|\boldsymbol y - \boldsymbol{X \beta} \|^2 + \frac{\sigma^2}{b}\sum{|\beta_j|}\Big) \\ \text{where } \lambda = \frac{\sigma^2}{b}$$
+
+### Part 3 (10 pts.)
+
+There is a relationship between the optimal solutions for the regression coefficients under no penalty (the OLS solution), the ridge penalty, and the LASSO penalty.  The exact relationship cannot be derived for most cases, but we can gain some knowledge by assuming that the predictors are exactly orthogonal to one another.  Since we can always rescale the variance of the features, we can further restrict this to feature sets that have **orthonormal** columns - $\boldsymbol{X'X} = \mathcal{I}_P$.
+
+Assuming the feature matrix, $\boldsymbol{X}$, has orthnormal columns, show that:
+
+$$\hat{\beta}_{OLS} = \boldsymbol{X'y} \text{   ;   } \hat{\beta}_{Ridge} = \frac{\hat{\beta}_{OLS}}{1 + \lambda} \text{   ;   } \hat{\beta}_{LASSO} = \text{sign}(\hat{\beta}_{OLS}) \times \text{max}(|\hat{\beta}_{OLS}| - \lambda , 0)$$
+
+What do these equations show about **how** ridge and LASSO shrink coefficients towards zero?  Why can the LASSO set a coefficient to zero while ridge cannot?
+
+
+Notes:
+
+  1. $\sum \limits_{j = 1}^P \beta_j^2$ can also be expressed as $\beta'\beta$.
+  
+  2. Expand the squared-L2 norm first and then substitute $\hat{\beta}_{OLS} = \boldsymbol{X'y}$.
+  
+  3. It is probably easier to drop everything to elements of the coefficient vector for the LASSO at a certain point - e.g. work with $\beta_j$ instead of $\boldsymbol{\beta}$.  Since everything becomes a sum or sum of squares or sum of absolute values, you can separate the problem out easier this way.
+  
+  4. You can take it as a given that the sign of $\hat{\beta}_{OLS,j}$ is the same as $\hat{\beta}_{LASSO,j}$ (unless the LASSO solution is zero, but it won't matter there).
+  
+  5. These solutions can be found online and in various textbook resources.  I think this is a great exercise for thinking through complex minimization problems, so don't spoil yourself unless you really find yourself stuck.
+  
+#### Solution
+
+For **OLS**, we already know that $\hat{\beta} = (X'X)^{-1}X'Y$
+
+Given that we are dealing with a matrix which columns are orthognol to one another, $X'X = \mathcal{I}_p$
+
+Since, the inverse of an identity matrix will just be the identity matrix itself, we can conclude that for matrix that has orthonormal columns, 
+$$\hat{\beta}_{OLS} = \mathcal{I}_p \ X'Y = X'Y$$
+
+**Ridge Regression**
+
+As for Ridge Regression, we already have
+
+$$\hat{\beta}=\underset{\boldsymbol{\beta}}{\text{argmin}} \sum \bigg(y_i-\alpha -\sum_{j=1}^{P}{x_ij\beta_j}\bigg)^2 + \lambda\sum_{j=1}^{P}{(|\beta_j|)}^2$$
+We first foil the equation in matrix form,
+$$\hat{\beta} = Y'Y - 2\beta'X'Y+\beta'X'X\beta+\lambda\beta'\beta$$
+
+Taking the derivative w.r.t $\beta$ and setting it equal to zero:
+
+$$-2X'Y + 2X'X\beta + 2\lambda \beta=0 \\ X'Y = X'X\beta + \lambda\beta \\ X'Y = (X'X + \lambda\mathcal{I})\beta$$
+
+$$\\ \hat{\beta}=(X'X+\lambda \mathcal{I})^{-1}X'Y$$
+
+Given the matrix is orthogonal, $X'X=\mathcal{I}$
+
+$$\hat{\beta}=(\mathcal{I}+\lambda\mathcal{I})^{-1}X'Y\\=(1+\lambda)^{-1}\hat{\beta}_{OLS}$$
+
+**LASSO**
+
+We define $\hat{\beta}_{LASSO}$ as 
+
+$$\hat{\beta}_{LASSO}=||Y-X\beta||^2+\lambda \sum_{j=1}^{P} |\beta_j|$$
+
+We again foil the equation in matrix form,
+$$\hat{\beta} = Y'Y - 2\beta'X'Y+\beta'X'X\beta+\lambda\sum|\beta_j|$$
+
+diff w.r.t $\beta$
+$$\frac{\partial \hat{\beta}_{LASSO}}{\partial\beta} = -X'Y+X'X \beta+\frac{\partial}{\partial\beta}\lambda\sum|\beta_j|= 0 \\
+=-\hat{\beta}_{OLS}+I\hat{\beta}_{LASSO}+\frac{\partial}{\partial\beta}\lambda\sum|\beta_j|=0$$
+
+In order to differentiate absolute value, we evaluate two condition where $\beta_j>0$ and $\beta_j<0$:
+
+1. When $\beta_j>0$, $\frac{\partial \hat{\beta}_{LASSO}}{\partial\beta}$ will just be
+
+$$=-\hat{\beta}_{OLS}+I\hat{\beta}_{LASSO}+\frac{\partial}{\partial\beta}\lambda\sum\beta_j=0$$
+
+$$=-\hat{\beta}_{OLS}+\hat{\beta}_{LASSO}+ \lambda=0 \\ \hat{\beta}_{LASSO}=\hat{\beta}_{OLS}-\lambda$$
+And because $\hat{\beta}_{LASSO}$ and $\hat{\beta}_{OLS}$ has follow the same sign, when $\hat{\beta}_{LASSO}$ and $\hat{\beta}_{OLS}$ go positive, we get
+
+$$\hat{\beta}_{LASSO}=sign(\hat{\beta}_{OLS}) \times max(\hat{\beta}_{OLS}+\lambda, 0)$$
+2. When $\beta_j<0$, we evaluate
+
+$$=-\hat{\beta}_{OLS}+I\hat{\beta}_{LASSO}+\frac{\partial}{\partial\beta}\lambda\sum-\beta_j=0$$
+$$=-\hat{\beta}_{OLS}+\hat{\beta}_{LASSO}+ -\lambda=0 \\ \hat{\beta}_{LASSO}=\hat{\beta}_{OLS}+\lambda=-(\hat{\beta}_{OLS}-\lambda)$$
+
+Thus, we have 
+$$\hat{\beta}_{LASSO}=sign(\hat{\beta}_{OLS}) \times max(-(\hat{\beta}_{OLS}-\lambda), 0)$$
+
+which $\hat{\beta}_{LASSO}$ will always be 0.
+
+From this expression, we can indeed see that, LASSO is able to shrink our predictors to zero because of the above property.
+
+
+## Problem 2: Applying Ridge and LASSO (70 pts.)
+
+Ridge and LASSO are great methods for parsing through data sets with lots of predictors to find:
+
+  1. An interpretable set of important predictors - which predictors are **signal** and which ones are just **noise**
+  2. The set of parameters that minimize expected prediction error (with all the caveats that we discussed in the previous lectures)
+  
+Where these methods really shine for purpose 1 (and purpose 2, by construction) is when the ratio of predictors to observations approaches 1.  To see this and work through an example using pre-built software, let's try to build a model that predicts IMDB ratings for episodes of the Office (the U.S. Version).  `office_train.csv` includes IMDB ratings (`imdb_rating`) for 115 episodes of the office and a number of predictors for each episode:
+
+  1. The season of the episode (1 - 9, which should be treated as an unordered categorical variable)
+  2. The number of times main characters speak in the episode (`andy` through `jan`)
+  3. The director of the episode (`ken_kwapis` through `justin_spitzer`).  There can be more than 1 director per episode, so it's not a pure categorical variable.  However, the correlation is high!
+  
+Let's use this data to build a predictive model for IMDB ratings and check our predictive accuracy on the heldout test set (`office_test.csv`).
+
+For this problem, you can restrict your search to the set of standard linear models (e.g. no interactions, no basis expansions, etc.).  If you would like to try to include more terms to improve the model, you are more than welcome to try!
+
+### Part 1 (10 pts.)
+
+Start by limiting yourself to the standard OLS model.   
+
+Find the regression coefficients that minimize the training error under squared error loss and use this model to compute the LOOCV estimate of the expected prediction error.
+
+Which predictors are important?  Which ones are not?  This can be difficult to tell from the OLS estimates!
+
+#### Solution
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+#setwd("/Users/zejiachen/Desktop/Sspring 2022/Statstical Learning/problemSet 3")
+office_trn <- read.csv("office_train.csv")
+office_test <- read.csv("office_test.csv")
+```
+
+Convert our `season` into factors
+```{r}
+office_trnFac <- subset(office_trn, select=c( -episode_name, -episode))
+
+# Re-label values of Season (1 = Season 1, 2 = Season 2, ...)
+for (i in (1:9)){
+  
+  office_trnFac$season[office_trnFac$season == paste("Season", i)] <- i
+}
+
+# convert `season` & `episode` to type factor
+office_trnFac$season <- as.factor(office_trnFac$season)
+#office_trnFac$episode <- as.factor(office_trnFac$episode)
+
+```
+
+Run the OLS model
+```{r}
+ols_office <- lm(imdb_rating ~., 
+                 data = office_trnFac)
+
+coef <- summary(ols_office)$coefficients[, 1]
+
+# plot
+plot_df <- data.frame(ols_office$fitted.values, office_trn$imdb_rating)
+colors <- c( "predict_rating" = "red", "overseved rating" = "blue")
+
+gg <- ggplot(plot_df, aes(x = ols_office.fitted.values, 
+                          y = office_trn.imdb_rating)) + 
+  geom_point() +
+  geom_abline(intercept=0, slope=1, col = 'red') +
+  labs( 
+       y="overserved rating", 
+       x="fitted rating", 
+       color = "Legend"
+       )
+
+plot(gg)
+
+#LOOCV
+print(paste("LOOCV = ", mean((ols_office$residuals/(1-hatvalues(ols_office)))^2)))
+
+```
+
+
+```{r}
+summary(ols_office)
+```
+
+`greg_daniels`, `b_j_novak`, `paul_lieberstein`, `mindy_kaling` etc.
+`jim`, `kelly`, `micharl`
+
+Some of the most important predictors are a blend of both episode directors and some the most important characters in the tv series. However, some predictors seem to have perfect collinearity with one another, resulting LOOCV being NaN.
+
+### Part 2 (20 pts.)
+
+Now, consider ridge regression.  Using a pre-built implementation of ridge regression, train the model using a large number of possible values for $\lambda$.  
+
+For each value of $\lambda$ used, compute the L1-norm for the estimated coefficients (e.g. $\sum |\beta_j|$ ) and plot the value of the regression coefficients against this value - there should be a separate line for each regression coefficient. (Hint: There is a built-in method for doing this in the `glmnet` package.)  Which predictors seem to be most important?  You can see these as the one with "non-zero" regression coefficients when $\lambda$ is large or the L2-norm for the estimated coefficient set is small.  If it is too difficult to see over the entire $\lambda$ path, restrict the x variable limits to the lower part of the graph with the `xlim = c(low,high)` argument.  It may still be kind of difficult to tell from the graph - ridge regression is not known for its pretty pictures!
+
+Finally, we need to select a value of $\lambda$ that minimizes the expected prediction error.  Using $10$-fold cross validation, find a reasonable value of $\lambda$ that should minimize the expected prediction error.  You can choose the actual minimum or a slightly less complex model (smaller $\lambda$ is less complex).  Defend this choice.
+
+Create a plot that demonstrates the regression coefficients for the ridge regression with your optimal choice of $\lambda$.  Which predictors are important?  Which ones are not?  I recommend using a sideways bar plot - you can see an example construction [here](https://dk81.github.io/dkmathstats_site/rvisual-sideways-bargraph.html).
+
+#### Solution
+
+```{r}
+library(caret)
+library(glmnet)
+library(plotmo)
+```
+
+Reshape the factor `season` to fit the dataset into the model
+```{r}
+dummy_office_trn <- caret::dummyVars("~ .", data = office_trnFac)
+office_trnFac <- data.frame(predict(dummy_office_trn, newdata = office_trnFac))
+```
+
+Preparing the data set for Ridge
+```{r}
+office_trnPrep <- as.matrix(office_trnFac[,-37])
+office_trnOut <- as.matrix(office_trnFac$imdb_rating)
+
+ridge_office <- glmnet::glmnet(x = office_trnPrep, y = office_trnOut, alpha = 0)
+```
+
+Plotting...
+```{r}
+plot_glmnet(ridge_office, xvar = "norm")
+```
+
+
+```{r}
+# L1 norm = sum of absolute value of coef
+plot_glmnet(ridge_office, xvar = "norm", xlim = c(0, 0.0009), ylim = c(-0.00005, 0.00005))
+```
+
+
+```{r}
+plot(ridge_office, xvar = "lambda", label = T)
+```
+
+```{r}
+plot(ridge_office, xvar = "lambda", label = T, xlim = c(4.8, 5.29), ylim = c(-0.0005, 0.0005))
+```
+
+We extract the coefficient and evaluate the most significant predictors
+```{r}
+coef_ridge <- as.matrix(coef(ridge_office, s= 0.1))
+coef_ridge
+```
+
+```{r}
+theme_set(theme_bw())
+coef_ridge_df <- data.frame(coef_ridge)
+colnames(coef_ridge_df)[1] <- "coef"
+coef_ridge_df <- cbind(predictors = rownames(coef_ridge_df), coef_ridge_df)
+rownames(coef_ridge_df) <- 1:nrow(coef_ridge_df)
+coef_ridge_df <- coef_ridge_df[-1,]
+
+ggplot(coef_ridge_df, aes(x=reorder(predictors,-coef), y=coef, label=round(coef, 2))) + 
+  geom_point(stat='identity', fill="black", size=6)  +
+  geom_segment(aes(y = 0, 
+                   x = predictors, 
+                   yend = coef, 
+                   xend = predictors), 
+               color = "black") +
+  geom_text(color="white", size=2) +
+  labs(title="Most significant predictors w/ Cross Validation", subtitle = "Ridge", y = "coef", x = "predictors") +
+  ylim(-0.35, 0.3) +
+  coord_flip()
+```
+
+
+**Cross Validation**
+
+Set the `folds` to 10
+```{r}
+ridge_office_cv <- cv.glmnet(office_trnPrep, office_trnOut, type.measure = "mse", alpha = 0, family = "gaussian", nfolds = 10)
+```
+
+```{r}
+plot(ridge_office_cv)
+```
+
+```{r}
+ridge_office_cv
+```
+
+
+```{r}
+theme_set(theme_bw())
+ridge_coefs_cv <- coef(ridge_office_cv, s = ridge_office_cv$lambda.min)
+ridge_coefs_cv <- as.data.frame(summary(ridge_coefs_cv))[-1,]
+col_names_df <- data.frame(colnames(office_trnPrep))
+ridge_coefs_cv <- cbind(ridge_coefs_cv, col_names_df)
+colnames(ridge_coefs_cv)[4] <- "predictors"
+
+ggplot(ridge_coefs_cv, aes(x=reorder(predictors,-x), y=x, label=round(x, 2))) + 
+  geom_point(stat='identity', fill="black", size=6)  +
+  geom_segment(aes(y = 0, 
+                   x = predictors, 
+                   yend = x, 
+                   xend = predictors), 
+               color = "black") +
+  geom_text(color="white", size=2) +
+  labs(title="Most significant predictors w/ Cross Validation", subtitle = "Ridge", y = "coef", x = "predictors") + 
+  #ylim(-0.19, 0.15) +
+  coord_flip()
+
+```
+
+From the L1 Norm graph, we cannot tell which predictor is the most important one because they are indistinguiable even when we set `xlim` and `ylim` to very small values. However, from the coefficient graph (with lambda.min obtained from cross validation), we can see that `season 1` has the largest negative coefficient (-0.33), and `greg_daniels` has the largest positive coefficient (0.29). The predictors that have coefficients close to 0 are not important, which are mostly all the character appearances in the epidsodes (from Ryan to Oscar)
+
+When it comes to selecting the optimal $\lambda$, the `cv.glmnet` function can output a value that minimizes cross validation mean square error. The lambda.min is 0.51. We can also graph the cross validation MSE against $\text{Log}(\lambda)$ and see that MSE is minimized when $\text{Log}(\lambda)$ is just below 0. $\text{Log}(0.51)=-0.3$
+
+
+### Part 3 (20 pts.)
+
+Finally, consider linear regression with the LASSO penalty.  Using a pre-built implementation, train the model using a large number of possible values for $\lambda$.  
+
+For each value of $\lambda$ used, compute the L1-norm for the estimated coefficients (e.g. $\sum |\beta_j|$ ) and plot the value of the regression coefficients against this value - there should be a separate line for each regression coefficient.  Which predictors seem to be most important?  You can see these as the one with non-zero regression coefficients when $\lambda$ is large or the L1-norm for the estimated coefficient set is small.
+
+Finally, we need to select a value of $\lambda$ that minimizes the expected prediction error.  Using $10$-fold cross validation, find a reasonable value of $\lambda$ that should minimize the expected prediction error.  You can choose the actual minimum or a slightly less complex model (smaller $\lambda$ is less complex).  Defend this choice.
+
+Create a plot that demonstrates the regression coefficients for the LASSO regression with your optimal choice of $\lambda$.  Which predictors are important?  Which ones are not?
+
+We were simply repeating what we did previously, but running with LASSO this time.
+```{r}
+LASSO_office <- glmnet::glmnet(x = office_trnPrep, y = office_trnOut, alpha = 1)
+
+plot_glmnet(LASSO_office, xvar = "norm")
+plot_glmnet(LASSO_office, xvar = "norm", xlim = c(0, 1.5), ylim = c(-0.005, 0.005))
+```
+
+**Cross-Validation**
+```{r}
+
+LASSO_office_cv <- cv.glmnet(office_trnPrep, office_trnOut, type.measure = "mse", alpha = 1, family = "gaussian", nfolds = 10)
+
+plot(LASSO_office_cv)
+```
+
+```{r}
+LASSO_office_cv
+```
+```{r}
+LASSO_coef_optim <- coef(LASSO_office, s= LASSO_office_cv$lambda.min)
+LASSO_coef_optim
+```
+
+
+```{r}
+theme_set(theme_bw())
+LASSO_coef_optim <- coef(LASSO_office, s= LASSO_office_cv$lambda.min)
+LASSO_coef_optim <- as.data.frame(summary(LASSO_coef_optim))
+col_names_df2 <- rbind(c("Intercept",0), col_names_df)
+LASSO_coef_name <- col_names_df2[c(LASSO_coef_optim$i),1]
+LASSO_coef_optim <- cbind(LASSO_coef_optim, LASSO_coef_name)
+colnames(LASSO_coef_optim)[4] <- "predictors"
+
+ggplot(LASSO_coef_optim, aes(x=reorder(predictors,-x), y=x, label=round(x, 2))) + 
+  geom_point(stat='identity', fill="black", size=6)  +
+  geom_segment(aes(y = 0, 
+                   x = predictors, 
+                   yend = x, 
+                   xend = predictors), 
+               color = "black") +
+  geom_text(color="white", size=2) +
+  labs(title="Most significant predictors w/ Cross Validation", subtitle = "LASSO", y = "coef", x = "predictors") +
+  # if we want to get a close look, comment it out 
+  #ylim(-0.3, 0.5) +
+  coord_flip()
+
+```
+
+
+The L1 Norm graph shows that `season 8` is the most important predictor because it is the last to shrink to 0 when L1 Norm approaches 0. The predictors whose coefficients that shrink to 0 in the coefficient table are not important.
+
+As we did in Part 2, we use the `cv.glmnet` to select the optimal $\lambda$. We can also graph the  the cross validation MSE against $\text{Log}(\lambda)$. Here, again, the MSE minimizing $\lambda$ is also the smallest one in the dotted range given by `cv.glmnet`, so we will choose `lambda.min` given by `cv.glmnet`
+
+
+### Part 4 (20 pts.)
+
+Which of OLS, Ridge, or LASSO has the smallest cross validation estimate of expected prediction error?  Do you have any intuition as to why this result occurs?
+
+Using the optimal models from each step, compute an estimate of the expected prediction error using the heldout test data.  Does the same relationship hold?
+
+Create a plot (or set of plots) that puts the predicted test set outcome for each method along the x-axis and the true value on the y-axis.  How does OLS compare to Ridge and LASSO?  How do the regularized models improve the predictive fit?  
+
+Do any of the models provide what you might consider to be a "good" predictive model?  Interpretable?
+
+#### Solution 
+
+OLS: 0.2472
+Ridge: 0.2093
+Lasso: 0.2163 
+
+Ridge has lowest estimated expected prediction error and OLS has the largest.
+Ridge and Lasso regularization reduce expected prediction error because they help to shrink the coefficient towards zero. This would generally decrease bias and alleviate overfitting issue for our model. 
+
+Besides, Ridge model seems to be more accurate than Lasso, by estimated expected prediction error. This might be cause by the fact that Ridge generally shrinks coefficient more drastically than Lasso.
+
+Process testing data.
+```{r}
+office_testFac <- subset(office_test, select=c( -episode_name, -episode))
+# Re-label values of Season (1 = Season 1, 2 = Season 2, ...)
+for (i in (1:9)){
+  
+  office_testFac$season[office_testFac$season == paste("Season", i)] <- i
+}
+# convert `season` & `episode` to type factor
+office_testFac$season <- as.factor(office_testFac$season)
+pred_ols<-predict.lm(ols_office, office_testFac)
+a=sum((pred_ols-office_testFac$imdb_rating)^2)/21 # MSE
+a
+
+dummy_office_test <- caret::dummyVars("~ .", data = office_testFac)
+office_testFac <- data.frame(predict(dummy_office_test, newdata = office_testFac))
+
+office_testPrep <- as.matrix(office_testFac[,-37])
+office_testOut <- as.matrix(office_testFac$imdb_rating)
+```
+Ridge
+```{r}
+pred_ridge<-predict.glmnet(ridge_office,newx=office_testPrep,s=0.558)
+sum((pred_ridge-office_testOut)^2)/21
+```
+
+Lasso
+```{r}
+pred_lasso<-predict.glmnet(object=LASSO_office,newx=office_testPrep,s=0.0485)
+sum((pred_lasso-office_testOut)^2)/21
+```
+
+
+```{r}
+df<-data.frame(true_imdb_rating=office_testFac$imdb_rating, predicted_imdb_rating=pred_ols)
+ggplot(df,aes(x=predicted_imdb_rating,y=true_imdb_rating))+geom_point()+geom_smooth(method='lm',se=FALSE)+ggtitle("OLS")
+```
+
+```{r}
+df2<-data.frame(true_imdb_rating=office_testFac$imdb_rating, predicted_imdb_rating=pred_ridge)
+ggplot(df2,aes(x=pred_ridge,y=true_imdb_rating))+geom_point()+geom_smooth(method='lm',se=FALSE)+ggtitle("Ridge")
+```
+
+```{r}
+df3<-data.frame(true_imdb_rating=office_testFac$imdb_rating, predicted_imdb_rating=pred_lasso)
+ggplot(df3,aes(x=pred_lasso,y=true_imdb_rating))+geom_point()+geom_smooth(method='lm',se=FALSE)+ggtitle("Lasso")
+```
+The same relation still holds, and Ridge and Lasso regularizations improve testing MSE on holdout set by a significant amount. This indicates that the shrinkage of coefficients towards 0 significantly decrease overfitting by shrinking. Comparing Ridge with Lasso, Ridge has lower testing error possibly because Ridge generally shrinks coefficient more drastically than Lasso.
+
+I believe a good model should be both accurate on predicting out-of-sample data and relatively interpretable. The Ridge and Lasso regularized models clearly beats OLS model on predictive accuracy. While Ridge and Lasso are pretty close to each other on their ability to predict new data, Lasso-regularized model shrinks some coefficients to exactly zero and only leaves a few regressors. So, Lasso enables a easy visualization and higher interpretability. We believe that Lasso model is the best choice of model among the three. 
+
+
+
+***
+
+## Discussion on Computational Resources
+
+I'm going to provide some guidance on implementing Ridge and LASSO in R and Python.  For these problems, I highly recommend using the package `glmnet` in both R and Python.  The vignette for R can be found [here](https://cran.r-project.org/web/packages/glmnet/vignettes/glmnet.pdf) and the vignette for the Python package can be found [here](https://glmnet-python.readthedocs.io/en/latest/glmnet_vignette.html#Usage).  This package was developed by the authors of ESL and ISLR as a general purpose implementation of the Elastic Net for estimating regression coefficients.  The packages is C++ and Fortran optimized, meaning that it absolutely beats the pants off of other implementations in terms of computational speed.  It also has built in functions and favorable construction for plotting regularization paths and choosing $\lambda$ via cross validation.  There are a million and one more implementations, but I think that this one is the best for our purposes.
+
+A first note is that the main function `glmnet` does not take formula inputs - e.g. `y ~ x1 + x2`.  Rather, it requires that you pass it a vector or matrix of outcome values, `y`, and a $N \times P$ matrix of predictors, `x`.  This is a design choice that is implemented to prevent people from using `glmnet` to mine their way to "victory" in finding the best predictive model.  One thing that we've seen is that we may want to consider basis expansions (`poly()` in R) or multiplicative interactions between predictors (`x1*x2` in R).  The formula language makes this implementation easy - maybe too easy.  Since Ridge and LASSO are essentially indiscriminately setting some number of predictors to zero, this would lead to nonsense models that have interaction terms without their constituent marginal components and broken basis expansions.  Rather than implement smart grouping features, the authors of the package discourage this by making you construct the predictor set rather than creating "user-friendly" niceties - when you see how big $P$ is for the full model, you'll often rethink whether or not you truly believe it's necessary!
+
+`glmnet` models the intercept separately.  This is because it makes little since to penalize the estimate of the intercept.  So, you do not need to include a column of 1s in your predictor matrix.
+
+There is one case where this construction leads to some pain - dummying out or one-hot encoding unordered categorical predictors.  For example, the season in the Office problem above should be treated as an unordered categorical predictor.  Typically, we can set `season` to be a factor and the formula language in R will deal with it for you.  However, `glmnet` requires us to do it ourselves. 
+
+To process the training and test data to "one-hot encode" the season of the episode, we need to convert the unordered categorical variable with $M$ categories to $M$ separate predictors that take a value of 1 if they are in that group and 0 otherwise.  For example, a variable called `Season 9` would take a value of 1 if the episode was in season 9 and 0 otherwise.  If the unordered categorical variable is a factor in a data frame, then there is an easy way to do it in R using the `caret` package and the function `dummyVars`:
+```{r, include=TRUE, eval = FALSE}
+train$season <- factor(train$season)
+dummy_train <- caret::dummyVars(" ~ .", data = train)
+train <- data.frame(predict(dummy_train, newdata = train))
+```
+which takes a data frame with factor columns and returns another data frame with all factor columns dummied out and the rest of the columns intact.  In Python, `OneHotEncoder` in `sklearn` will achieve the same thing.  There are also ways to do this manually, so do what is easiest for you.
+
+Another point is that `glmnet` standardizes all of the predictors.  Using a single $\lambda$ shrinkage parameter works best when all predictors are on the same scale.  This leads to standardized regression coefficients that are interpreted similarly - a 1 standard deviation change in X results in a $\beta$ unit change in Y.  This standardization can be done by the user, but it is not recommended since `glmnet` implements the standardization in a specific way.  This can lead to some weirdness when trying to predict new values of the outcome using a specific $\lambda$ value, so it is recommended that you use the built-in `predict` function to do this.
+
+`glmnet` has a lot of arguments.  But, we only really need to look at a few of them:
+
+  1. `x` and `y` - the input predictors and outcomes
+  
+  2. `family` - for now, we only need `family = "gaussian"`.  `glmnet` can do ridge or LASSO penalized generalized linear models - most importantly logistic regression.  Since we're only working with linear regression, we are assuming Gaussian distributed errors.
+  
+  3. `alpha` - the value for the exponent of the Elastic Net penalty.  `alpha = 0` corresponds to ridge regression while `alpha = 1` corresponds to LASSO regression.
+  
+  4. `nlambda` - the number of $\lambda$ values to consider when fitting the regularization path.  `glmnet` is smart and figures out good values for the minimum and maximum $\lambda$ to be considered.  This controls how granular the path of $\lambda$ checked is.  The default of 100 is usually more than enough.
+  
+  5. `lambda` - there's no need to do this!  Just fit the full path of $\lambda$ values and extract via `predict` or `coefs`.
+  
+Everything else is only needed for very specific circumstances.  If you need to change one of these from the defaults, you'll know.
+
+Two other functions of importance: 1) `predict` and 2) `cv.glmnet`.  
+
+`predict` for a `glmnet` object will take in new values of x and return the value of $\hat{y}$.  `newx` should be a `M \times P` matrix of $M$ new observations.  `s` is the value of $\lambda$ at which predictions are to be made.  `type` is not relevant for linear regression, but can be used to change what level of $\hat{y}$ is computed (more to come in a few weeks).
+
+`cv.glmnet` will create random partitions within the provided training data to do $K$-fold cross validation.  This approach is 100% superior to any implementation you will write yourself, so just use this for computing cross-validation estimates of the expected prediction error.  The arguments for `cv.glmnet` include all of the arguments for `glmnet` with two additional important inputs:
+
+  1. `nfolds` - the number of disjoint folds to create within the training data.  Default is 10 and is usually a good choice.
+  
+  2. `type.measure` - the loss function to consider when computing the estimate of the expected prediction error.  The default is to compute deviance, $-2 \ell \ell$, for the regression model.  Note that this is equivalent to MSE for the Gaussian model.  Two other common choices - `mse` and `mae`.  The choice here should be informed by what loss you're trying to minimize.  MSE works well for our purposes, but may not make sense in other contexts.
+  
+With `cv.glmnet`, you can plot the $K$-fold curve for all attempted values of $\lambda$ and search for a meaningful minimum.  It will also return the minimum loss $\lambda$ and the one standard error value of $\lambda$.  Your choice here should be informed by the problem, but is unlikely to make a significant difference in your conclusions.
