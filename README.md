@@ -48,6 +48,7 @@ Topics include: Splines, GAM
 **Data Analysis 1**
 
 [View html](https://htmlpreview.github.io/?https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/midterm1/Midterm/Midterm_Q1-4.html)
+
 [View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/midterm1/Midterm)
 
 ---
@@ -58,6 +59,7 @@ Binary & Multinomial Classification
 Topics includes: Logistic Regression, Generative Classificaiton
 
 [View html](https://htmlpreview.github.io/?https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/classification/problemSet%205/problemSet5_final/ProblemSet5%20(Finished).html)
+
 [View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/classification/problemSet%205)
 
 ---
@@ -68,16 +70,19 @@ Classification continues
 Topics includes: Support Vector Machine, Flexible Classification
 
 [View pdf](https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/classification/problemSet6/Problem%20Set%206%20Final/ProblemSet6.pdf)
+
 [View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/classification/problemSet6)
 
 ---
 **Data Analysis 2**
 
 [View html](https://htmlpreview.github.io/?https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/DataAnalysis%232/Midterm2_Finalized/Midterm2_Finalized.html)
+
 [View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/DataAnalysis%232)
 
 ---
 **Final Project**
 
 [View write-up](https://docs.google.com/document/d/1Pzx-W7Zr6yvvXTn7xTXgP4qzWpxY9skFpQgZx8LFc78/edit?usp=sharing)
+
 [View code](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/FinalProject/notebook)
