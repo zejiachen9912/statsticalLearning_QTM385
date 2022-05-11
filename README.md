@@ -1,14 +1,14 @@
 # statsticalLearning_QTM385
- 
+
 **Problem Set 1**
 
 Statistical Learning Warmup
 
 Topics include: Simple Linear Regression, Maximum Likihood Estimation, R programming.
 
-[View html](https://htmlpreview.github.io/?https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/Problemset%201/ProblemSet1.html)
+[View html](https://htmlpreview.github.io/?https://github.com/zejiachen9912/statsticalLearning_QTM385/blob/main/linearity/Problemset%201/ProblemSet1.html)
 
-[View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/Problemset%201)
+[View Files](https://github.com/zejiachen9912/statsticalLearning_QTM385/tree/main/linearity/Problemset%201)
 
 ---
 **Problem Set 2**
