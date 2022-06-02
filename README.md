@@ -1,7 +1,5 @@
 # statsticalLearning_QTM385
 
-[Notes taken from the class](https://immediate-dawn-dda.notion.site/Statistical-Learning-48cbf12ce99e4ad0b815d9cd8db434c2)
-
 **Problem Set 1**
 
 Statistical Learning Warmup
